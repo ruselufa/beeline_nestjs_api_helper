@@ -1,13 +1,11 @@
+import { Injectable } from '@nestjs/common';
 import { ILogObj, Logger } from 'tslog';
-import { ILogger } from './logger.interface';
-import { injectable } from 'inversify';
-import 'reflect-metadata';
 
-@injectable()
-export class LoggerService implements ILogger {
+@Injectable()
+export class LoggerService {
 	public logger: Logger<ILogObj>;
 	constructor() {
-		this.logger = new Logger<any>({
+		this.logger = new Logger<ILogObj>({
 			type: 'pretty',
 			hideLogPositionForProduction: true,
 			// displayInstanceName: false,

@@ -1,20 +1,18 @@
-import { IConfigService } from './config.service.interface';
-import { DotenvConfigOutput, DotenvParseOutput } from 'dotenv';
-import { inject, injectable } from 'inversify';
+import { Injectable } from '@nestjs/common';
+import { config, DotenvConfigOutput, DotenvParseOutput } from 'dotenv';
 import { ILogger } from '../logger/logger.interface';
-import { TYPES } from 'src/types';
+import { LoggerService } from '../logger/logger.service';
 
-@injectable()
-export class ConfigService implements IConfigService {
+@Injectable()
+export class ConfigService {
 	private config: DotenvParseOutput;
-	constructor(@inject(TYPES.ILogger) private logger: ILogger) {
+	constructor(private readonly logger: LoggerService) {
 		const result: DotenvConfigOutput = config();
 		if (result.error) {
 			this.logger.error('[ConfigService] Не удалось прочитать файл .env или он отсутствует');
-			throw result.error;
 		} else {
 			this.logger.log('[ConfigService] Конфигурация .env загружена');
-			this.config = result.parsed as DotenvParseOutput;
+			this.config = result.parsed;
 		}
 	}
 

@@ -28,7 +28,13 @@ export class TelegramBotService {
 			const abonents = await this.beelineApiCallService.getAllAbonents();
 			const formattedAbonent = abonents[0];
 			await ctx.reply(
-				`ID: ${formattedAbonent.userId},
+				`Количество абонентов: ${abonents.length},
+Уникальных департаментов: ${abonents.map((abonent) => abonent.department).filter((department, index, self) => self.indexOf(department) === index).length}
+Департаменты: ${abonents
+					.map((abonent) => abonent.department)
+					.filter((department, index, self) => self.indexOf(department) === index)
+					.join('; ')}
+ID: ${formattedAbonent.userId},
 Phone: ${formattedAbonent.phone},
 FirstName: ${formattedAbonent.firstName},
 LastName: ${formattedAbonent.lastName ? formattedAbonent.lastName : 'N/A'},
@@ -41,8 +47,12 @@ Extension: ${formattedAbonent.extension}`,
 			// 		`ID: ${abonent.userId}, Phone: ${abonent.phone}, Name: ${abonent.firstName} ${abonent.lastName}, Department: ${abonent.department}, Extension: ${abonent.extension}`,
 			// );
 			// await ctx.reply(formattedAbonents.join('\n'));
-		} catch (error) {
-			await ctx.reply(`Error: ${error.message}`);
+		} catch (error: unknown) {
+			if (error instanceof Error) {
+				await ctx.reply(`Ошибка запроса абонентов: ${error.message}`);
+			} else {
+				await ctx.reply('Произошла неизвестная ошибка при запросе абонентов');
+			}
 		}
 	}
 
@@ -90,8 +100,12 @@ Extension: ${formattedAbonent.extension}`,
 				{ source: mp3Buffer, filename: 'call_recording.mp3' },
 				{ caption: 'Вот ваша запись 📞' },
 			);
-		} catch (error) {
-			await ctx.reply('Ошибка при получении записи: ' + error.message);
+		} catch (error: unknown) {
+			if (error instanceof Error) {
+				await ctx.reply('Ошибка при получении записи: ' + error.message);
+			} else {
+				await ctx.reply('Произошла неизвестная ошибка при запросе записи');
+			}
 		}
 	}
 }

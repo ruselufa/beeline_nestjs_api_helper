@@ -81,7 +81,7 @@ export class BeelineApiCallService {
 
 			return Buffer.from(response.data); // возвращаем буфер
 		} catch (error) {
-			throw new Error('Не удалось получить mp3 файл');
+			throw new Error('Не удалось получить mp3 файл. Ошибка: ' + error);
 		}
 	}
 
