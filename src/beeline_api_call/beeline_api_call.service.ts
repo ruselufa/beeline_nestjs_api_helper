@@ -2,34 +2,11 @@ import { HttpService } from '@nestjs/axios';
 import { Injectable } from '@nestjs/common';
 import { firstValueFrom } from 'rxjs';
 import { AxiosError } from 'axios';
-
-interface AbonentsResponse {
-	userId: string;
-	phone: string;
-	firstName?: string;
-	lastName?: string;
-	department: string;
-	extension: string;
-}
-
-interface ApiErrorResponse {
-	message?: string;
-	error?: string;
-	statusCode?: number;
-}
-
-interface RecordDetailsResponse {
-	id: string;
-	externalId: string;
-	callId: string;
-	phone: string;
-	direction: string;
-	date: string;
-	duration: number;
-	fileSize: number;
-	comment: string;
-	abonent: AbonentsResponse;
-}
+import {
+	AbonentsResponse,
+	ApiErrorResponse,
+	RecordDetailsResponse,
+} from './beeline_api_call.interface';
 
 @Injectable()
 export class BeelineApiCallService {
