@@ -3,7 +3,7 @@ import { Column, Entity, OneToMany, PrimaryGeneratedColumn } from 'typeorm';
 import { AbonentRecord } from './abonent.record.entity';
 
 @Entity()
-export class User {
+export class Abonent {
 	@PrimaryGeneratedColumn()
 	id: number;
 
@@ -64,6 +64,6 @@ export class User {
 	@Column({ default: true })
 	active: boolean;
 
-	@OneToMany(() => AbonentRecord, (record) => record.abonent)
+	@OneToMany(() => AbonentRecord, (abonent) => abonent.abonent)
 	abonentRecords: AbonentRecord[];
 }

@@ -1,6 +1,5 @@
 import { Injectable } from '@nestjs/common';
 import { config, DotenvConfigOutput, DotenvParseOutput } from 'dotenv';
-import { ILogger } from '../logger/logger.interface';
 import { LoggerService } from '../logger/logger.service';
 
 @Injectable()

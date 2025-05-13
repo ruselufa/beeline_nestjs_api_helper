@@ -11,9 +11,14 @@ import { TelegramBotModule } from './telegram_bot/telegram_bot.module';
 import { TelegrafModule } from 'nestjs-telegraf';
 import { ConfigService } from './config/config.service';
 import { LoggerService } from './logger/logger.service';
+import { ConfigModule } from '@nestjs/config';
+import { DatabaseModule } from './database/database.module';
 
 @Module({
 	imports: [
+		ConfigModule.forRoot({
+			isGlobal: true,
+		}),
 		TelegrafModule.forRoot({
 			token: '7506088721:AAF78PYd8iEdw_TAXaZfC7o4IQFy9AcrdHU',
 			// middlewares: [new SessionFlavor()],
@@ -21,6 +26,7 @@ import { LoggerService } from './logger/logger.service';
 			// providers: [SessionFlavor],
 		}),
 		TelegramBotModule,
+		DatabaseModule,
 		// TypeOrmModule.forRoot({
 		// 	type: 'postgres',
 		// 	host: process.env.DB_HOST,

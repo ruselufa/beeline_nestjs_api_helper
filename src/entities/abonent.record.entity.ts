@@ -1,8 +1,8 @@
 import { IsEnum, IsNotEmpty, IsNumber, IsString } from 'class-validator';
 import { Column, Entity, ManyToOne, PrimaryGeneratedColumn } from 'typeorm';
-import { User } from './user.entity';
+import { Abonent } from './abonent.entity';
 
-@Entity({ name: 'abonent_record' })
+@Entity({ name: 'user_record' })
 export class AbonentRecord {
 	@PrimaryGeneratedColumn()
 	id: number;
@@ -66,6 +66,6 @@ export class AbonentRecord {
 	@IsString()
 	comment: string;
 
-	@ManyToOne(() => User, (user) => user.abonentRecords)
-	abonent: User;
+	@ManyToOne(() => Abonent, (abonent) => abonent.abonentRecords)
+	abonent: Abonent;
 }
