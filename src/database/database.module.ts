@@ -16,7 +16,7 @@ import * as entities from '../entities';
 				synchronize: true,
 			}),
 		}),
-
+		// TODO: Проверить работу второй базы данных на чтение
 		TypeOrmModule.forRootAsync({
 			imports: [ConfigModule],
 			inject: [ConfigService],
