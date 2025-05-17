@@ -86,4 +86,44 @@ export class BeelineApiCallService {
 			throw new Error('Unknown error occurred while getting record info');
 		}
 	}
+
+	async getAllRecordsByUserId(
+		userId?: string,
+		dateFrom?: string,
+		dateTo?: string,
+	): Promise<any[]> {
+		const token = '655bc2aa-198f-44a8-a66b-11c90a72f684';
+		const url = 'https://cloudpbx.beeline.ru/apis/portal/records';
+		let allRecords: any[] = [];
+		let lastId: string | undefined = undefined;
+		let hasMore = true;
+
+		while (hasMore) {
+			const params: any = {};
+			if (userId) params.userId = userId;
+			if (dateFrom) params.dateFrom = dateFrom;
+			if (dateTo) params.dateTo = dateTo;
+			if (lastId) params.id = lastId;
+
+			const response = await firstValueFrom(
+				this.httpService.get<any[]>(url, {
+					headers: {
+						'X-MPBX-API-AUTH-TOKEN': token,
+					},
+					params,
+				}),
+			);
+
+			const records = response.data;
+			allRecords = allRecords.concat(records);
+
+			if (records.length < 100) {
+				hasMore = false;
+			} else {
+				lastId = records[records.length - 1].id;
+			}
+		}
+		// console.log(allRecords);
+		return allRecords;
+	}
 }

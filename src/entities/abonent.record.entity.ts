@@ -17,8 +17,7 @@ export class AbonentRecord {
 	@IsString()
 	beelineExternalId: string;
 
-	@Column()
-	@IsNotEmpty()
+	@Column({ nullable: true })
 	@IsString()
 	callId: string;
 
