@@ -2,6 +2,9 @@ import { HttpService } from '@nestjs/axios';
 import { Injectable } from '@nestjs/common';
 import { firstValueFrom } from 'rxjs';
 import { AxiosError } from 'axios';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { AbonentRecord } from '../entities/abonent.record.entity';
 import {
 	AbonentsResponse,
 	ApiErrorResponse,
@@ -10,7 +13,11 @@ import {
 
 @Injectable()
 export class BeelineApiCallService {
-	constructor(private readonly httpService: HttpService) {}
+	constructor(
+		private readonly httpService: HttpService,
+		@InjectRepository(AbonentRecord)
+		private readonly abonentRecordRepository: Repository<AbonentRecord>,
+	) {}
 
 	async getAllAbonents(): Promise<AbonentsResponse[]> {
 		// const token = process.env.API_AUTH_TOKEN;
@@ -87,6 +94,11 @@ export class BeelineApiCallService {
 		}
 	}
 
+	private formatDateForUrl(dateString: string): string {
+		// Не кодируем дату, так как axios сам закодирует параметры
+		return dateString;
+	}
+
 	async getAllRecordsByUserId(
 		userId?: string,
 		dateFrom?: string,
@@ -101,8 +113,8 @@ export class BeelineApiCallService {
 		while (hasMore) {
 			const params: any = {};
 			if (userId) params.userId = userId;
-			if (dateFrom) params.dateFrom = dateFrom;
-			if (dateTo) params.dateTo = dateTo;
+			if (dateFrom) params.dateFrom = this.formatDateForUrl(dateFrom);
+			if (dateTo) params.dateTo = this.formatDateForUrl(dateTo);
 			if (lastId) params.id = lastId;
 
 			const response = await firstValueFrom(
@@ -124,6 +136,45 @@ export class BeelineApiCallService {
 			}
 		}
 		// console.log(allRecords);
+		return allRecords;
+	}
+
+	async getAllRecordsByUserIdFromLastRecord(
+		userId: string,
+		dateFrom?: string,
+		dateTo?: string,
+	): Promise<any[]> {
+		const token = '655bc2aa-198f-44a8-a66b-11c90a72f684';
+		const url = 'https://cloudpbx.beeline.ru/apis/portal/records';
+		let allRecords: any[] = [];
+		let lastId: string | undefined = undefined;
+		let hasMore = true;
+
+		while (hasMore) {
+			const params: any = {};
+			params.userId = userId;
+			if (dateFrom) params.dateFrom = this.formatDateForUrl(dateFrom);
+			if (dateTo) params.dateTo = this.formatDateForUrl(dateTo);
+			if (lastId) params.id = lastId;
+
+			const response = await firstValueFrom(
+				this.httpService.get<any[]>(url, {
+					headers: {
+						'X-MPBX-API-AUTH-TOKEN': token,
+					},
+					params,
+				}),
+			);
+
+			const records = response.data;
+			allRecords = allRecords.concat(records);
+
+			if (records.length < 100) {
+				hasMore = false;
+			} else {
+				lastId = records[records.length - 1].id;
+			}
+		}
 		return allRecords;
 	}
 }
