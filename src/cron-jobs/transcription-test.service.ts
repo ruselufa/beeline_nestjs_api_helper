@@ -1,72 +1,82 @@
 import { Injectable, OnApplicationBootstrap } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 import { TranscriptionService } from '../transcription/transcription.service';
+import { BeelineApiCallService } from '../beeline_api_call/beeline_api_call.service';
+import { AbonentRecord } from '../entities/abonent.record.entity';
 import * as path from 'path';
+import * as fs from 'fs';
 
 @Injectable()
 export class TranscriptionTestService implements OnApplicationBootstrap {
-  constructor(private readonly transcriptionService: TranscriptionService) {}
+  constructor(
+    private readonly transcriptionService: TranscriptionService,
+    private readonly beelineApiCallService: BeelineApiCallService,
+    @InjectRepository(AbonentRecord)
+    private readonly abonentRecordRepository: Repository<AbonentRecord>,
+  ) {}
 
   async onApplicationBootstrap() {
-    await this.testTranscription();
+    setTimeout(() => {
+      this.processFreshRecordsForTranscription();
+    }, 1000); // запуск через 1 секунду после старта приложения
   }
 
-  private async testTranscription() {
-    try {
-      console.log('\n=== Начало тестовой транскрибации ===');
-      const testMp3Path = path.join(process.cwd(), 'import', 'mp3', 'file.mp3');
-      
-      console.log(`Путь к тестовому файлу: ${testMp3Path}`);
-      
-      try {
-        // Отправляем файл на транскрибацию
-        const transcriptionResponse = await this.transcriptionService.transcribeAudio(testMp3Path);
-        console.log('\nФайл отправлен на транскрибацию:');
-        console.log(`- ID файла: ${transcriptionResponse.file_id}`);
-        console.log(`- Статус: ${transcriptionResponse.status}`);
-        console.log(`- Позиция в очереди: ${transcriptionResponse.queue_position}`);
-        console.log('\nМетрики сервиса:');
-        console.log(`- Размер очереди: ${transcriptionResponse.metrics.queue_size}`);
-        console.log(`- Среднее время обработки: ${transcriptionResponse.metrics.avg_processing_time} сек`);
-        console.log(`- Средняя скорость: ${transcriptionResponse.metrics.avg_processing_speed} МБ/сек`);
-        console.log(`- Обработано файлов: ${transcriptionResponse.metrics.files_processed}`);
-        
-        // Проверяем статус каждые 30 секунд
-        const checkStatus = async () => {
-          const status = await this.transcriptionService.getStatus(transcriptionResponse.file_id);
-          console.log('\nПроверка статуса транскрибации:');
-          console.log(`- Текущий статус: ${status.status}`);
-          console.log(`- Время создания: ${status.created_at}`);
-          
-          if (status.status === 'completed') {
-            console.log('\nТранскрибация завершена!');
-            console.log(`- Время обработки: ${status.processing_time} сек`);
-            console.log(`- Размер файла: ${status.file_size} байт`);
-            
-            const result = await this.transcriptionService.downloadResult(transcriptionResponse.file_id);
-            console.log('\nРезультат транскрибации:');
-            console.log(result);
-            return;
+  private async processFreshRecordsForTranscription() {
+    let offset = 0;
+    const batchSize = 20;
+    let processedTotal = 0;
+    while (true) {
+      // Получаем batchSize свежих записей, которые не были скачаны и не слишком короткие
+      const records = await this.abonentRecordRepository.find({
+        where: [
+          { beeline_download: false, to_short: false },
+          { beeline_download: null, to_short: false },
+          { transcribe_processed: false, to_short: false },
+        ],
+        order: { date: 'DESC' },
+        skip: offset,
+        take: batchSize,
+      });
+      if (!records.length) break;
+      for (const record of records) {
+        if (record.duration < 240000) {
+          record.to_short = true;
+          await this.abonentRecordRepository.save(record);
+          continue;
+        }
+        try {
+          // 1. Скачиваем mp3
+          await this.beelineApiCallService.saveRecordMp3ToImportFolder(record.beelineId, record.phone);
+          record.beeline_download = true;
+          await this.abonentRecordRepository.save(record);
+          // 2. Отправляем на транскрибацию
+          const mp3Path = path.join(process.cwd(), 'import', 'mp3', `${record.beelineId}_client_${record.phone}.mp3`);
+          const transcription = await this.transcriptionService.transcribeAudio(mp3Path);
+          // 3. Получаем результат
+          const txt = await this.transcriptionService.downloadResult(transcription.file_id);
+          // 4. Сохраняем результат в export/txt/{beelineId}_client_{phone}.txt
+          const exportDir = path.join(process.cwd(), 'export', 'txt');
+          if (!fs.existsSync(exportDir)) fs.mkdirSync(exportDir, { recursive: true });
+          const txtPath = path.join(exportDir, `${record.beelineId}_client_${record.phone}.txt`);
+          fs.writeFileSync(txtPath, txt);
+          record.transcribe_processed = true;
+          await this.abonentRecordRepository.save(record);
+          // 5. Удаляем mp3-файл
+          try {
+            fs.unlinkSync(mp3Path);
+            console.log(`mp3-файл удалён: ${mp3Path}`);
+          } catch (delErr) {
+            console.error(`Не удалось удалить mp3-файл: ${mp3Path}`, delErr);
           }
-          
-          if (status.status === 'error') {
-            console.error('\nОшибка транскрибации:', status.error);
-            return;
-          }
-          
-          // Если обработка еще идет, проверяем снова через 30 секунд
-          console.log('\nОжидание 30 секунд до следующей проверки...');
-          setTimeout(checkStatus, 30000);
-        };
-        
-        // Запускаем первую проверку
-        console.log('\nЗапуск мониторинга статуса...');
-        setTimeout(checkStatus, 30000);
-        
-      } catch (error) {
-        console.error('\nОшибка при тестовой транскрибации:', error);
+          processedTotal++;
+          console.log(`Запись ${record.beelineId} успешно обработана и транскрибирована.`);
+        } catch (err) {
+          console.error(`Ошибка при обработке записи ${record.beelineId}:`, err);
+        }
       }
-    } catch (error) {
-      console.error('\nКритическая ошибка:', error);
+      offset += batchSize;
     }
+    console.log(`Всего обработано и транскрибировано: ${processedTotal} записей.`);
   }
 } 

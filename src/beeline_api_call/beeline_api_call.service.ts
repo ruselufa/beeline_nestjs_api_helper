@@ -10,6 +10,8 @@ import {
 	ApiErrorResponse,
 	RecordDetailsResponse,
 } from './beeline_api_call.interface';
+import * as fs from 'fs';
+import * as path from 'path';
 
 @Injectable()
 export class BeelineApiCallService {
@@ -176,5 +178,33 @@ export class BeelineApiCallService {
 			}
 		}
 		return allRecords;
+	}
+
+	async saveRecordMp3ToImportFolder(recordId: string, phone: string): Promise<string> {
+		try {
+			const buffer = await this.getRecordFile(recordId);
+			const dir = path.join(process.cwd(), 'import', 'mp3');
+			if (!fs.existsSync(dir)) {
+				try {
+					fs.mkdirSync(dir, { recursive: true });
+					console.log(`[saveRecordMp3ToImportFolder] Папка создана: ${dir}`);
+				} catch (mkdirErr) {
+					console.error(`[saveRecordMp3ToImportFolder] Не удалось создать папку: ${dir}`, mkdirErr);
+					throw new Error('Ошибка создания папки для mp3-файлов');
+				}
+			}
+			const filePath = path.join(dir, `${recordId}_client_${phone}.mp3`);
+			try {
+				fs.writeFileSync(filePath, buffer);
+				console.log(`[saveRecordMp3ToImportFolder] Файл сохранён: ${filePath}`);
+			} catch (writeErr) {
+				console.error(`[saveRecordMp3ToImportFolder] Не удалось сохранить файл: ${filePath}`, writeErr);
+				throw new Error('Ошибка сохранения mp3-файла');
+			}
+			return filePath;
+		} catch (err) {
+			console.error(`[saveRecordMp3ToImportFolder] Ошибка при сохранении mp3 для recordId=${recordId}:`, err);
+			throw new Error(`Не удалось сохранить mp3-файл для recordId=${recordId}: ${err.message}`);
+		}
 	}
 }

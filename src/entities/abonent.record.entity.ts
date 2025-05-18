@@ -65,6 +65,18 @@ export class AbonentRecord {
 	@IsString()
 	comment: string;
 
+	@Column({ type: 'boolean', default: false })
+	beeline_download: boolean;
+
+	@Column({ type: 'boolean', default: false })
+	transcribe_processed: boolean;
+
+	@Column({ type: 'boolean', default: false })
+	deepseek_analysed: boolean;
+
+	@Column({ type: 'boolean', default: false })
+	to_short: boolean;
+
 	@ManyToOne(() => Abonent, (abonent) => abonent.abonentRecords)
 	abonent: Abonent;
 }
