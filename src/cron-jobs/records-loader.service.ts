@@ -14,7 +14,6 @@ function chunks<T>(array: T[], size: number): T[][] {
   return result;
 }
 
-
 @Injectable()
 export class RecordsLoaderService implements OnApplicationBootstrap {
   constructor(
@@ -26,7 +25,26 @@ export class RecordsLoaderService implements OnApplicationBootstrap {
   ) {}
 
   async onApplicationBootstrap() {
-    await this.loadAllAbonentsRecords();
+    // try {
+    //   // Получаем всех абонентов
+    //   const abonents = await this.abonentRepository.find();
+    //   console.log(`Найдено ${abonents.length} абонентов для загрузки записей`);
+
+    //   // Для каждого абонента загружаем записи с момента последней сохраненной
+    //   for (const [index, abonent] of abonents.entries()) {
+    //     try {
+    //       await this.loadAndSaveRecordsForUserFromLastRecord(abonent.userId);
+    //       console.log(`Обработан абонент ${index + 1} из ${abonents.length}`);
+    //     } catch (error) {
+    //       console.error(`Ошибка при загрузке записей для пользователя ${abonent.userId}:`, error);
+    //       // Продолжаем с следующим пользователем даже если произошла ошибка
+    //       continue;
+    //     }
+    //   }
+    //   console.log('Загрузка записей для всех пользователей завершена');
+    // } catch (error) {
+    //   console.error('Ошибка при загрузке записей для всех пользователей:', error);
+    // }
   }
 
   // Делаем cron на каждый день в 3:30 ночи
@@ -49,17 +67,6 @@ export class RecordsLoaderService implements OnApplicationBootstrap {
         }
       }));
     }
-    
-  
-    // for (const [index, abonent] of abonents.entries()) {
-    //   try {
-    //     await this.loadAndSaveRecordsForUserFromLastRecord(abonent.userId);
-    //     console.log(`Обработан абонент ${index + 1} из ${abonents.length}`);
-    //   } catch (error) {
-    //     console.error(`Ошибка при загрузке записей для пользователя ${abonent.userId}:`, error);
-    //     continue;
-    //   }
-    // }
     console.log('Загрузка записей для всех пользователей завершена');
   }
 
@@ -97,9 +104,6 @@ export class RecordsLoaderService implements OnApplicationBootstrap {
         console.log(`Запись ${record.id} уже существует`);
         continue;
       };
-
-      // Пропускаем, если нет callId
-      // if (!record.callId) continue;
 
       const entity = this.abonentRecordRepository.create({
         beelineId: record.id,
