@@ -6,6 +6,7 @@ import { BeelineApiCallService } from '../beeline_api_call/beeline_api_call.serv
 import { AbonentRecord } from '../entities/abonent.record.entity';
 import * as path from 'path';
 import * as fs from 'fs';
+import { MoreThan } from 'typeorm';
 
 @Injectable()
 export class TranscriptionTestService implements OnApplicationBootstrap {
@@ -26,14 +27,27 @@ export class TranscriptionTestService implements OnApplicationBootstrap {
     let offset = 0;
     const batchSize = 20;
     let processedTotal = 0;
+
+    // Получаем общее количество записей для обработки (только длинные)
+    const totalRecords = await this.abonentRecordRepository.count({
+      where: {
+        beeline_download: false,
+        transcribe_processed: false,
+        to_short: false,
+        duration: MoreThan(240000)
+      }
+    });
+    console.log(`Всего найдено записей длительностью > 4 минут для обработки: ${totalRecords}`);
+
     while (true) {
       // Получаем batchSize свежих записей, которые не были скачаны и не слишком короткие
       const records = await this.abonentRecordRepository.find({
-        where: [
-          { beeline_download: false, to_short: false },
-          { beeline_download: null, to_short: false },
-          { transcribe_processed: false, to_short: false },
-        ],
+        where: {
+          beeline_download: false,
+          transcribe_processed: false,
+          to_short: false,
+          duration: MoreThan(240000)
+        },
         order: { date: 'DESC' },
         skip: offset,
         take: batchSize,
@@ -70,13 +84,13 @@ export class TranscriptionTestService implements OnApplicationBootstrap {
             console.error(`Не удалось удалить mp3-файл: ${mp3Path}`, delErr);
           }
           processedTotal++;
-          console.log(`Запись ${record.beelineId} успешно обработана и транскрибирована.`);
+          console.log(`Запись ${record.beelineId} успешно обработана и транскрибирована. (Прогресс: ${processedTotal}/${totalRecords}, осталось: ${totalRecords - processedTotal})`);
         } catch (err) {
           console.error(`Ошибка при обработке записи ${record.beelineId}:`, err);
         }
       }
       offset += batchSize;
     }
-    console.log(`Всего обработано и транскрибировано: ${processedTotal} записей.`);
+    console.log(`Обработка завершена. Всего обработано записей: ${processedTotal} из ${totalRecords}`);
   }
 } 
