@@ -17,6 +17,7 @@ import { CronJobsModule } from './cron-jobs/cron-jobs.module';
 import { Abonent } from './entities/abonent.entity';
 import { AbonentRecord } from './entities/abonent.record.entity';
 import { Client } from './entities/client.entity';
+import { AiDeepseekModule } from './ai_deepseek/ai_deepseek.module';
 
 @Module({
 	imports: [
@@ -44,6 +45,7 @@ import { Client } from './entities/client.entity';
 		DatabaseModule,
 		BeelineApiCallModule,
 		CronJobsModule,
+		AiDeepseekModule,
 		// TypeOrmModule.forRoot({
 		// 	type: 'postgres',
 		// 	host: process.env.DB_HOST,

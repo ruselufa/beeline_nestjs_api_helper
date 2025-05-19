@@ -8,6 +8,8 @@ import { AbonentRecord } from '../entities/abonent.record.entity';
 import { RecordsLoaderService } from './records-loader.service';
 import { TranscriptionModule } from '../transcription/transcription.module';
 import { TranscriptionTestService } from './transcription-test.service';
+import { ConversationAnalyzerService } from './conversation-analyzer.service';
+import { AiDeepseekModule } from '../ai_deepseek/ai_deepseek.module';
 
 @Module({
   imports: [
@@ -15,8 +17,19 @@ import { TranscriptionTestService } from './transcription-test.service';
     BeelineApiCallModule,
     TypeOrmModule.forFeature([Abonent, AbonentRecord]),
     TranscriptionModule,
+    AiDeepseekModule
   ],
-  providers: [AbonentsUpdaterService, RecordsLoaderService, TranscriptionTestService],
-  exports: [RecordsLoaderService],
+  providers: [
+    AbonentsUpdaterService,
+    RecordsLoaderService,
+    TranscriptionTestService,
+    ConversationAnalyzerService
+  ],
+  exports: [
+    AbonentsUpdaterService,
+    RecordsLoaderService,
+    TranscriptionTestService,
+    ConversationAnalyzerService
+  ]
 })
 export class CronJobsModule {} 

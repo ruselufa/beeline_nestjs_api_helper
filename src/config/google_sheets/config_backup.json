@@ -1,0 +1,85 @@
+{
+  "table": {
+    "blocks": [
+      {
+        "blockName": "Продажи и резюме разговора",
+        "headers": [
+          {
+            "id": "sale_probability",
+            "label": "Вероятность продажи %"
+          },
+          {
+            "id": "rating_explanation_1",
+            "label": "Объяснение оценки"
+          },
+          {
+            "id": "conversation_result",
+            "label": "Итог разговора"
+          },
+          {
+            "id": "detailed_summary",
+            "label": "Подробное резюме разговора"
+          }
+        ]
+      },
+      {
+        "blockName": "Настрой клиента, потребности, возражения и факты",
+        "headers": [
+          {
+            "id": "attitude",
+            "label": "Настрой %"
+          },
+          {
+            "id": "rating_explanation_2",
+            "label": "Объяснение оценки"
+          },
+          {
+            "id": "facts",
+            "label": "Факты"
+          },
+          {
+            "id": "needs",
+            "label": "Потребности"
+          },
+          {
+            "id": "objections",
+            "label": "Возражения"
+          }
+        ]
+      },
+      {
+        "blockName": "Работа менеджера и советы",
+        "headers": [
+          {
+            "id": "politeness",
+            "label": "Вежливость %"
+          },
+          {
+            "id": "rating_explanation_3",
+            "label": "Объяснение оценки"
+          },
+          {
+            "id": "presentation",
+            "label": "Презентация %"
+          },
+          {
+            "id": "rating_explanation_4",
+            "label": "Объяснение оценки"
+          },
+          {
+            "id": "objection_handling",
+            "label": "Отработка возражений %"
+          },
+          {
+            "id": "rating_explanation_5",
+            "label": "Объяснение оценки"
+          },
+          {
+            "id": "mop_advice",
+            "label": "Советы МОПу"
+          }
+        ]
+      }
+    ]
+  }
+} 
