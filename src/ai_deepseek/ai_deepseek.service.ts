@@ -1,50 +1,57 @@
 import { Injectable, OnModuleDestroy, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { HttpService } from '@nestjs/axios';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 import { firstValueFrom } from 'rxjs';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { DeepseekResponse, DeepseekRequestOptions, DeepseekMessage } from './types';
-import { getSystemPrompt } from './prompts/system.prompt';
+import { getSalesPrompt, getQualityPrompt } from './prompts';
+import { AnalyzedAi } from '../entities';
+import { ClientService } from './services/client.service';
 
 @Injectable()
 export class AiDeepseekService implements OnModuleDestroy {
   private readonly apiKey: string;
   private readonly apiUrl: string = 'https://api.deepseek.com/v1/chat/completions';
   private readonly logger = new Logger(AiDeepseekService.name);
-  private readonly systemPrompt: string;
 
   constructor(
     private configService: ConfigService,
-    private httpService: HttpService
+    private httpService: HttpService,
+    private clientService: ClientService,
+    @InjectRepository(AnalyzedAi)
+    private analyzedAiRepository: Repository<AnalyzedAi>
   ) {
     this.apiKey = this.configService.get<string>('DEEPSEEK_API_KEY');
     if (!this.apiKey) {
       throw new Error('DEEPSEEK_API_KEY не найден в конфигурации');
     }
-
-    this.systemPrompt = getSystemPrompt();
     
-    // Настраиваем дефолтные заголовки для всех запросов
     this.httpService.axiosRef.defaults.headers.common['Authorization'] = `Bearer ${this.apiKey}`;
     this.httpService.axiosRef.defaults.headers.common['Content-Type'] = 'application/json';
-    this.httpService.axiosRef.defaults.timeout = 600000; // 10 минут
+    this.httpService.axiosRef.defaults.timeout = 600000;
   }
 
-  /**
-   * Анализирует текст разговора с помощью Deepseek API
-   * @param text текст разговора для анализа
-   * @returns результат анализа в структурированном формате
-   */
-  async analyzeConversation(text: string): Promise<any> {
+  private getPromptByDepartment(department: string): string {
+    return department.toLowerCase().includes('quality') ? 
+      getQualityPrompt() : 
+      getSalesPrompt();
+  }
+
+  async analyzeConversation(text: string, clientId: string): Promise<any> {
     try {
-      this.logger.log(`Начинаем анализ разговора длиной ${text.length} символов...`);
-      this.logger.log('Отправляем запрос к DeepSeek API...');
+      this.logger.log(`Начинаем анализ разговора для клиента ${clientId}`);
+      
+      // Получаем информацию о клиенте
+      const clientInfo = await this.clientService.getClientInfo(clientId);
+      const systemPrompt = this.getPromptByDepartment(clientInfo.department);
 
       const requestOptions: DeepseekRequestOptions = {
         model: 'deepseek-reasoner',
         messages: [
-          { role: 'system', content: this.systemPrompt },
+          { role: 'system', content: systemPrompt },
           { role: 'user', content: text }
         ],
         temperature: 0.7,
@@ -58,68 +65,71 @@ export class AiDeepseekService implements OnModuleDestroy {
         )
       );
 
-      this.logger.log(`Получен ответ от сервера, статус: ${response.status}`);
+      const analysisResult = response.data.choices[0].message.content;
 
-      // Сохраняем ответ для отладки
-      await this.saveDebugResponse(response.data);
+      // Сохраняем результат в БД
+      const analyzedConversation = this.analyzedAiRepository.create({
+        conversationId: `conv_${Date.now()}`,
+        department: clientInfo.department,
+        originalText: text,
+        analysisResult: typeof analysisResult === 'string' ? 
+          JSON.parse(analysisResult) : analysisResult,
+        clientId,
+        clientName: clientInfo.name,
+        clientPhone: clientInfo.phone
+      });
 
-      this.logger.log('✓ Ответ успешно получен и обработан');
+      await this.analyzedAiRepository.save(analyzedConversation);
+      
+      this.logger.log('✓ Анализ успешно сохранен в базе данных');
 
-      return response.data.choices[0].message.content;
+      return analysisResult;
 
     } catch (error) {
-      if (error.code === 'ECONNABORTED') {
-        this.logger.error('❌ Превышено время ожидания ответа от DeepSeek API');
-      } else {
-        this.logger.error(`❌ Ошибка при запросе к DeepSeek API: ${error.message}`);
-        if (error.response) {
-          this.logger.error(`Детали ошибки: ${JSON.stringify(error.response.data)}`);
-        }
-      }
+      this.logger.error(`❌ Ошибка при анализе разговора: ${error.message}`);
       throw error;
     }
   }
 
-  /**
-   * Анализирует текстовый файл с разговором
-   * @param filePath путь к файлу с текстом разговора
-   * @returns результат анализа в структурированном формате
-   */
-  async analyzeConversationFile(filePath: string): Promise<any> {
+  async analyzeConversationFile(filePath: string, clientId: string): Promise<any> {
     try {
       const fileContent = await fs.readFile(filePath, 'utf-8');
-      return await this.analyzeConversation(fileContent);
+      return await this.analyzeConversation(fileContent, clientId);
     } catch (error) {
-      throw new Error(`Ошибка при обработке файла: ${error.message}`);
+      this.logger.error(`Ошибка при обработке файла ${filePath}: ${error.message}`);
+      throw error;
     }
   }
 
-  /**
-   * Сохраняет ответ API в файл для отладки
-   */
-  private async saveDebugResponse(response: DeepseekResponse): Promise<void> {
+  async analyzeConversationFiles(directory: string): Promise<void> {
     try {
-      const debugDir = path.join(process.cwd(), 'debug_files');
-      await fs.mkdir(debugDir, { recursive: true });
+      const files = await fs.readdir(directory);
+      const txtFiles = files.filter(file => file.endsWith('.txt'));
 
-      const timestamp = new Date().toISOString().replace(/:/g, '-');
-      const debugFile = path.join(debugDir, `debug_response_${timestamp}.json`);
+      this.logger.log(`Найдено ${txtFiles.length} файлов для анализа`);
 
-      await fs.writeFile(
-        debugFile,
-        JSON.stringify(response, null, 2),
-        'utf-8'
-      );
+      for (const file of txtFiles) {
+        const filePath = path.join(directory, file);
+        
+        // Извлекаем clientId из имени файла (предполагается формат: client_123.txt)
+        const clientId = file.split('_')[1].split('.')[0];
+        
+        try {
+          await this.analyzeConversationFile(filePath, clientId);
+          this.logger.log(`✓ Успешно проанализирован файл: ${file}`);
+        } catch (error) {
+          this.logger.error(`❌ Ошибка при анализе файла ${file}: ${error.message}`);
+          continue;
+        }
+      }
 
-      this.logger.log(`Ответ сохранен в файл: ${debugFile}`);
+      this.logger.log('✓ Анализ всех файлов завершен');
     } catch (error) {
-      this.logger.error(`Ошибка при сохранении отладочного файла: ${error.message}`);
+      this.logger.error(`❌ Ошибка при обработки директории: ${error.message}`);
+      throw error;
     }
   }
 
-  /**
-   * Закрытие сервиса при остановке приложения
-   */
   async onModuleDestroy() {
     this.logger.log('Сервис AiDeepseek завершает работу');
   }
