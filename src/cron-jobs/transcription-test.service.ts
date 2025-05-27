@@ -78,6 +78,7 @@ export class TranscriptionTestService implements OnApplicationBootstrap {
           await this.abonentRecordRepository.save(record);
           // 5. Удаляем mp3-файл
           try {
+            // TODO: проверить, удаляется ли файл на самом деле
             fs.unlinkSync(mp3Path);
             console.log(`mp3-файл удалён: ${mp3Path}`);
           } catch (delErr) {
