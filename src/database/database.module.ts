@@ -1,8 +1,9 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { dbConfig } from 'src/config/db.config';
-import * as entities from '../entities';
+import { dbConfig, dbOrdersConfig } from 'src/config/db.config';
+import * as beelineEntities from '../entities/beeline';
+import * as orderEntities from '../entities/orders';
 
 @Module({
 	imports: [
@@ -12,23 +13,22 @@ import * as entities from '../entities';
 			inject: [ConfigService],
 			useFactory: (configService: ConfigService) => ({
 				...dbConfig(configService),
-				entites: Object.values(entities),
+				entities: Object.values(beelineEntities),
 				synchronize: true,
 			}),
 		}),
-		// TODO: Проверить работу второй базы данных на чтение
 		TypeOrmModule.forRootAsync({
 			imports: [ConfigModule],
 			inject: [ConfigService],
 			useFactory: (configService: ConfigService) => ({
-				...dbConfig(configService),
-				name: 'read',
-				entites: Object.values(entities),
-				synchronize: true,
+				...dbOrdersConfig(configService),
+				name: 'orders',
+				entities: Object.values(orderEntities),
+				synchronize: false,
 			}),
 		}),
-
-		TypeOrmModule.forFeature(Object.values(entities)),
+		TypeOrmModule.forFeature(Object.values(beelineEntities)),
+		TypeOrmModule.forFeature(Object.values(orderEntities), 'orders'),
 	],
 	controllers: [],
 	providers: [],

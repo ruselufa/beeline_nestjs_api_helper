@@ -5,7 +5,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { InjectRepository } from '@nestjs/typeorm';
 import { AbonentRecord } from '../entities/abonent.record.entity';
-import { MoreThan } from 'typeorm';
+import { MoreThan, Repository } from 'typeorm';
 
 @Injectable()
 export class ExportGoogleSheetsService implements OnApplicationBootstrap {
@@ -13,6 +13,7 @@ export class ExportGoogleSheetsService implements OnApplicationBootstrap {
 
     constructor(
         @InjectRepository(AbonentRecord)
+        private readonly abonentRecordRepository: Repository<AbonentRecord>,
     ) {}
 
     async onApplicationBootstrap() {

@@ -9,128 +9,139 @@ import * as path from 'path';
 import { DeepseekResponse, DeepseekRequestOptions, DeepseekMessage } from './types';
 import { getSalesPrompt, getQualityPrompt } from './prompts';
 import { AnalyzedAi } from '../entities';
-import { ClientService } from './services/client.service';
+import { ClientsService } from 'src/clients/clients.service';
+import { AbonentRecord } from 'src/entities/abonent.record.entity';
+import { Abonent } from 'src/entities/abonent.entity';
 
 @Injectable()
 export class AiDeepseekService implements OnModuleDestroy {
-  private readonly apiKey: string;
-  private readonly apiUrl: string = 'https://api.deepseek.com/v1/chat/completions';
-  private readonly logger = new Logger(AiDeepseekService.name);
+	private readonly apiKey: string;
+	private readonly apiUrl: string = 'https://api.deepseek.com/v1/chat/completions';
+	private readonly logger = new Logger(AiDeepseekService.name);
 
-  constructor(
-    private configService: ConfigService,
-    private httpService: HttpService,
-    private clientService: ClientService,
-    @InjectRepository(AnalyzedAi)
-    private analyzedAiRepository: Repository<AnalyzedAi>
-  ) {
-    this.apiKey = this.configService.get<string>('DEEPSEEK_API_KEY');
-    if (!this.apiKey) {
-      throw new Error('DEEPSEEK_API_KEY не найден в конфигурации');
-    }
-    
-    this.httpService.axiosRef.defaults.headers.common['Authorization'] = `Bearer ${this.apiKey}`;
-    this.httpService.axiosRef.defaults.headers.common['Content-Type'] = 'application/json';
-    this.httpService.axiosRef.defaults.timeout = 600000;
-  }
+	constructor(
+		private configService: ConfigService,
+		private httpService: HttpService,
+		private clientsService: ClientsService,
+		@InjectRepository(AbonentRecord)
+		private abonentRecordRepository: Repository<AbonentRecord>,
+		@InjectRepository(Abonent)
+		private abonentRepository: Repository<Abonent>,
+		@InjectRepository(AnalyzedAi)
+		private analyzedAiRepository: Repository<AnalyzedAi>
+	) {
+		this.apiKey = this.configService.get<string>('DEEPSEEK_API_KEY');
+		if (!this.apiKey) {
+			throw new Error('DEEPSEEK_API_KEY не найден в конфигурации');
+		}
 
-  private getPromptByDepartment(department: string): string {
-    return department.toLowerCase().includes('quality') ? 
-      getQualityPrompt() : 
-      getSalesPrompt();
-  }
+		this.httpService.axiosRef.defaults.headers.common['Authorization'] = `Bearer ${this.apiKey}`;
+		this.httpService.axiosRef.defaults.headers.common['Content-Type'] = 'application/json';
+		this.httpService.axiosRef.defaults.timeout = 600000;
+	}
 
-  async analyzeConversation(text: string, clientId: string): Promise<any> {
-    try {
-      this.logger.log(`Начинаем анализ разговора для клиента ${clientId}`);
-      
-      // Получаем информацию о клиенте
-      const clientInfo = await this.clientService.getClientInfo(clientId);
-      const systemPrompt = this.getPromptByDepartment(clientInfo.department);
+	private getPromptByDepartment(department: string): string {
+		return department.toLowerCase().includes('Отдел Качества') || department.toLowerCase().includes('Отдел Продукта')
+			? getQualityPrompt()
+			: getSalesPrompt();
+	}
 
-      const requestOptions: DeepseekRequestOptions = {
-        model: 'deepseek-reasoner',
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: text }
-        ],
-        temperature: 0.7,
-        max_tokens: 4000
-      };
+	async analyzeConversation(text: string, clientPhone: string, abonentDepartment: string): Promise<any> {
+		try {
+			this.logger.log(`Начинаем анализ разговора для клиента`);
 
-      const response = await firstValueFrom(
-        this.httpService.post<DeepseekResponse>(
-          this.apiUrl,
-          requestOptions
-        )
-      );
+			// Получаем информацию о клиенте
+			const clientInfo = await this.clientsService.getClientByPhone(clientPhone);
+			const systemPrompt = this.getPromptByDepartment(abonentDepartment);
+			//   const systemPrompt = getSalesPrompt();
 
-      const analysisResult = response.data.choices[0].message.content;
+			const requestOptions: DeepseekRequestOptions = {
+				model: 'deepseek-reasoner',
+				messages: [
+					{ role: 'system', content: systemPrompt },
+					{ role: 'user', content: text }
+				],
+				temperature: 0.7,
+				max_tokens: 4000
+			};
 
-      // Сохраняем результат в БД
-      const analyzedConversation = this.analyzedAiRepository.create({
-        conversationId: `conv_${Date.now()}`,
-        department: clientInfo.department,
-        originalText: text,
-        analysisResult: typeof analysisResult === 'string' ? 
-          JSON.parse(analysisResult) : analysisResult,
-        clientId,
-        clientName: clientInfo.name,
-        clientPhone: clientInfo.phone
-      });
+			const response = await firstValueFrom(
+				this.httpService.post<DeepseekResponse>(
+					this.apiUrl,
+					requestOptions
+				)
+			);
 
-      await this.analyzedAiRepository.save(analyzedConversation);
-      
-      this.logger.log('✓ Анализ успешно сохранен в базе данных');
+			const analysisResult = response.data.choices[0].message.content;
 
-      return analysisResult;
+			// Сохраняем результат в БД
+			const analyzedConversation = this.analyzedAiRepository.create({
+				conversationId: `conv_${Date.now().toString()}`,
+				department: abonentDepartment,
+				originalText: text,
+				analysisResult: typeof analysisResult === 'string' ?
+					JSON.parse(analysisResult) : analysisResult,
+				clientId: 123,
+				clientName: 'Ruslan',
+				clientPhone: '9060845434',
+				clientEmail: 'ruslan@gmail.com'
+			});
 
-    } catch (error) {
-      this.logger.error(`❌ Ошибка при анализе разговора: ${error.message}`);
-      throw error;
-    }
-  }
+			await this.analyzedAiRepository.save(analyzedConversation);
 
-  async analyzeConversationFile(filePath: string, clientId: string): Promise<any> {
-    try {
-      const fileContent = await fs.readFile(filePath, 'utf-8');
-      return await this.analyzeConversation(fileContent, clientId);
-    } catch (error) {
-      this.logger.error(`Ошибка при обработке файла ${filePath}: ${error.message}`);
-      throw error;
-    }
-  }
+			this.logger.log('✓ Анализ успешно сохранен в базе данных');
 
-  async analyzeConversationFiles(directory: string): Promise<void> {
-    try {
-      const files = await fs.readdir(directory);
-      const txtFiles = files.filter(file => file.endsWith('.txt'));
+			return analysisResult;
 
-      this.logger.log(`Найдено ${txtFiles.length} файлов для анализа`);
+		} catch (error) {
+			this.logger.error(`❌ Ошибка при анализе разговора: ${error.message}`);
+			throw error;
+		}
+	}
 
-      for (const file of txtFiles) {
-        const filePath = path.join(directory, file);
-        
-        // Извлекаем clientId из имени файла (предполагается формат: client_123.txt)
-        const clientId = file.split('_')[1].split('.')[0];
-        
-        try {
-          await this.analyzeConversationFile(filePath, clientId);
-          this.logger.log(`✓ Успешно проанализирован файл: ${file}`);
-        } catch (error) {
-          this.logger.error(`❌ Ошибка при анализе файла ${file}: ${error.message}`);
-          continue;
-        }
-      }
+	async analyzeConversationFile(filePath: string, clientPhone: string, recordId): Promise<any> {
+		try {
+			const fileContent = await fs.readFile(filePath, 'utf-8');
+			const record = await this.abonentRecordRepository.findOne({ where: { id: recordId } });
+			const abonentDepartment = await this.abonentRepository.findOne({ where: { id: Number(record.abonent) } });
+			return await this.analyzeConversation(fileContent, clientPhone, abonentDepartment.department);
+		} catch (error) {
+			this.logger.error(`Ошибка при обработке файла ${filePath}: ${error.message}`);
+			throw error;
+		}
+	}
 
-      this.logger.log('✓ Анализ всех файлов завершен');
-    } catch (error) {
-      this.logger.error(`❌ Ошибка при обработки директории: ${error.message}`);
-      throw error;
-    }
-  }
+	async analyzeConversationFiles(directory: string): Promise<void> {
+		try {
+			const files = await fs.readdir(directory);
+			const txtFiles = files.filter(file => file.endsWith('.txt'));
 
-  async onModuleDestroy() {
-    this.logger.log('Сервис AiDeepseek завершает работу');
-  }
+			this.logger.log(`Найдено ${txtFiles.length} файлов для анализа`);
+
+			for (const file of txtFiles) {
+				const filePath = path.join(directory, file);
+
+				// Извлекаем clientPhone из имени файла (предполагается формат: client_123.txt)
+				const clientPhone = file.split('_')[1].split('.')[0];
+				const recordId = file.split('_')[0];
+
+				try {
+					await this.analyzeConversationFile(filePath, clientPhone, recordId);
+					this.logger.log(`✓ Успешно проанализирован файл: ${file}`);
+				} catch (error) {
+					this.logger.error(`❌ Ошибка при анализе файла ${file}: ${error.message}`);
+					continue;
+				}
+			}
+
+			this.logger.log('✓ Анализ всех файлов завершен');
+		} catch (error) {
+			this.logger.error(`❌ Ошибка при обработки директории: ${error.message}`);
+			throw error;
+		}
+	}
+
+	async onModuleDestroy() {
+		this.logger.log('Сервис AiDeepseek завершает работу');
+	}
 } 
