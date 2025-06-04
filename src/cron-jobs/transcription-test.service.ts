@@ -18,9 +18,9 @@ export class TranscriptionTestService implements OnApplicationBootstrap {
   ) {}
 
   async onApplicationBootstrap() {
-    setTimeout(() => {
-      this.processFreshRecordsForTranscription();
-    }, 1000); // запуск через 1 секунду после старта приложения
+    // setTimeout(() => {
+    //   this.processFreshRecordsForTranscription();
+    // }, 1000); // запуск через 1 секунду после старта приложения
   }
 
   private async processFreshRecordsForTranscription() {

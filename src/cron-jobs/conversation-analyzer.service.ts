@@ -82,8 +82,9 @@ export class ConversationAnalyzerService implements OnModuleInit {
 
 			// 185547108_client_9060845434.txt
 			const clientPhone = filename.split('_')[2].split('.')[0];
+			const recordId = filename.split('_')[0];
 			// Анализируем разговор
-			const result = await this.aiDeepseekService.analyzeConversationFile(inputPath, clientPhone);
+			const result = await this.aiDeepseekService.analyzeConversationFile(inputPath, clientPhone, recordId);
 
 			// Сохраняем результат
 			await fs.writeFile(

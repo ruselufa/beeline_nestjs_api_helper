@@ -17,7 +17,7 @@ export class AbonentsUpdaterService implements OnApplicationBootstrap {
 
   async onApplicationBootstrap() {
     this.logger.log('Приложение запущено, начинаю первичное обновление абонентов...');
-    // await this.updateAbonents();
+    await this.updateAbonents();
   }
 
   @Cron('0 3 * * *') // каждый день в 3:00 ночи

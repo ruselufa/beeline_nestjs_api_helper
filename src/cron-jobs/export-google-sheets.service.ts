@@ -1,8 +1,8 @@
 import { Injectable, OnApplicationBootstrap, Logger } from '@nestjs/common';
-import { GoogleSpreadsheet } from 'google-spreadsheet';
-import { GoogleAuth } from 'google-auth-library';
-import * as fs from 'fs';
-import * as path from 'path';
+// import { GoogleSpreadsheet } from 'google-spreadsheet';
+// import { GoogleAuth } from 'google-auth-library';
+// import * as fs from 'fs';
+// import * as path from 'path';
 import { InjectRepository } from '@nestjs/typeorm';
 import { AbonentRecord } from '../entities/abonent.record.entity';
 import { MoreThan, Repository } from 'typeorm';
@@ -18,9 +18,9 @@ export class ExportGoogleSheetsService implements OnApplicationBootstrap {
 
     async onApplicationBootstrap() {
         this.logger.log('Инициализация сервиса экспорта в Google Sheets...');
-        setTimeout(() => {
-            this.processExportToGoogleSheets();
-        }, 1000);
+        // setTimeout(() => {
+        //     this.processExportToGoogleSheets();
+        // }, 1000);
     }
 
     private async processExportToGoogleSheets() {
@@ -32,6 +32,7 @@ export class ExportGoogleSheetsService implements OnApplicationBootstrap {
             where: {
                 beeline_download: true,
                 transcribe_processed: true,
+                deepseek_analysed: true,
                 to_short: false,
                 duration: MoreThan(240000),
                 google_sheets_export: false
@@ -44,6 +45,7 @@ export class ExportGoogleSheetsService implements OnApplicationBootstrap {
                 where: {
                     beeline_download: true,
                     transcribe_processed: true,
+                    deepseek_analysed: true,
                     to_short: false,
                     duration: MoreThan(240000),
                     google_sheets_export: false

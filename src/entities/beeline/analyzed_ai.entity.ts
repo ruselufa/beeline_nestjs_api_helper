@@ -18,7 +18,7 @@ export class AnalyzedAi {
 	analysisResult: Record<string, any>;
 
 	@Column()
-	clientId: string;
+	clientId: number;
 
 	@Column({ nullable: true })
 	clientName: string;

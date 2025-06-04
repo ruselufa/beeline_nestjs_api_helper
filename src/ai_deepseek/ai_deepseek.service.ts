@@ -52,6 +52,22 @@ export class AiDeepseekService implements OnModuleDestroy {
 
 			// Получаем информацию о клиенте
 			const clientInfo = await this.clientsService.getClientByPhone(clientPhone);
+
+			let clientId: number | null = null;
+			let clientName: string | null = null;
+			let clientEmail: string | null = null;
+
+			if (clientInfo) {
+				const client = clientInfo.orders[0] ?? clientInfo.nullOrders[0];
+				if (client) {
+					clientId = client.idAzatGc ?? null;
+					clientName = client.userName ?? null;
+					clientEmail = client.userEmail ?? null;
+				} else {
+					this.logger.log('❌ Не удалось найти клиента в базе данных');
+					return null;
+				}
+			}
 			const systemPrompt = this.getPromptByDepartment(abonentDepartment);
 			//   const systemPrompt = getSalesPrompt();
 
@@ -75,19 +91,19 @@ export class AiDeepseekService implements OnModuleDestroy {
 			const analysisResult = response.data.choices[0].message.content;
 
 			// Сохраняем результат в БД
-			const analyzedConversation = this.analyzedAiRepository.create({
+			const createAnalyzedAiDto: CreateAnalyzedAiDto = {
 				conversationId: `conv_${Date.now().toString()}`,
 				department: abonentDepartment,
 				originalText: text,
 				analysisResult: typeof analysisResult === 'string' ?
 					JSON.parse(analysisResult) : analysisResult,
-				clientId: 123,
-				clientName: 'Ruslan',
-				clientPhone: '9060845434',
-				clientEmail: 'ruslan@gmail.com'
-			});
+				clientId: clientId,
+				clientName: clientName,
+				clientPhone: clientPhone,
+				clientEmail: clientEmail
+			}
 
-			await this.analyzedAiRepository.save(analyzedConversation);
+			await this.analyzedAiRepository.save(createAnalyzedAiDto);
 
 			this.logger.log('✓ Анализ успешно сохранен в базе данных');
 
