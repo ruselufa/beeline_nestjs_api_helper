@@ -12,6 +12,7 @@ import { AnalyzedAi } from '../entities/beeline/analyzed_ai.entity';
 import { ClientsService } from 'src/clients/clients.service';
 import { AbonentRecord } from 'src/entities/beeline/abonent.record.entity';
 import { Abonent } from 'src/entities/beeline/abonent.entity';
+import { CreateAnalyzedAiDto } from '../entities/beeline/analyzed_ai.dto';
 
 @Injectable()
 export class AiDeepseekService implements OnModuleDestroy {
@@ -56,7 +57,7 @@ export class AiDeepseekService implements OnModuleDestroy {
 			let clientId: number | null = null;
 			let clientName: string | null = null;
 			let clientEmail: string | null = null;
-
+			
 			if (clientInfo) {
 				const client = clientInfo.orders[0] ?? clientInfo.nullOrders[0];
 				if (client) {

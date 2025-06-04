@@ -1,4 +1,4 @@
-type CreateAnalyzedAiDto = {
+export type CreateAnalyzedAiDto = {
 	conversationId: string;
 	department: string;
 	originalText: string;

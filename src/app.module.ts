@@ -20,6 +20,7 @@ import { AiDeepseekModule } from './ai_deepseek/ai_deepseek.module';
 		ConfigModule.forRoot({
 			isGlobal: true,
 		}),
+		DatabaseModule,
 		TelegrafModule.forRoot({
 			token: '7506088721:AAF78PYd8iEdw_TAXaZfC7o4IQFy9AcrdHU',
 			// middlewares: [new SessionFlavor()],
@@ -27,7 +28,6 @@ import { AiDeepseekModule } from './ai_deepseek/ai_deepseek.module';
 			// providers: [SessionFlavor],
 		}),
 		TelegramBotModule,
-		DatabaseModule,
 		BeelineApiCallModule,
 		CronJobsModule,
 		AiDeepseekModule,
