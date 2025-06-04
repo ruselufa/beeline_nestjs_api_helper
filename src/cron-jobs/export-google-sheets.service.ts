@@ -4,7 +4,7 @@ import { Injectable, OnApplicationBootstrap, Logger } from '@nestjs/common';
 // import * as fs from 'fs';
 // import * as path from 'path';
 import { InjectRepository } from '@nestjs/typeorm';
-import { AbonentRecord } from '../entities/abonent.record.entity';
+import { AbonentRecord } from '../entities/beeline/abonent.record.entity';
 import { MoreThan, Repository } from 'typeorm';
 
 @Injectable()

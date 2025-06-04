@@ -1,5 +1,4 @@
 import { Module } from '@nestjs/common';
-import { TypeOrmModule } from '@nestjs/typeorm';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 // import { ManagerModel } from './managers/models/manager.model';
@@ -14,40 +13,12 @@ import { LoggerService } from './logger/logger.service';
 import { ConfigModule } from '@nestjs/config';
 import { DatabaseModule } from './database/database.module';
 import { CronJobsModule } from './cron-jobs/cron-jobs.module';
-import { Abonent } from './entities/abonent.entity';
-import { AbonentRecord } from './entities/abonent.record.entity';
-import { Client } from './entities/client.entity';
 import { AiDeepseekModule } from './ai_deepseek/ai_deepseek.module';
-import { AnalyzedAi } from './entities/beeline/analyzed_ai.entity';
-import { NullOrderModel, OrderModel } from './entities/orders';
 
 @Module({
 	imports: [
 		ConfigModule.forRoot({
 			isGlobal: true,
-		}),
-		TypeOrmModule.forRoot({
-			type: 'postgres',
-			host: process.env.DB_HOST,
-			port: parseInt(process.env.DB_PORT),
-			username: process.env.DB_USER,
-			password: process.env.DB_PASSWORD,
-			database: process.env.DB_NAME,
-			entities: [Abonent, AbonentRecord, Client, AnalyzedAi],
-			synchronize: true,
-			ssl: process.env.DB_SSL_MODE === 'require' ? { rejectUnauthorized: false } : false,
-		}),
-		TypeOrmModule.forRoot({
-			name: 'ordersConnection', // имя подключения
-			type: 'postgres',
-			host: process.env.DB_ORDERS_HOST,
-			port: parseInt(process.env.DB_ORDERS_PORT),
-			username: process.env.DB_ORDERS_USER,
-			password: process.env.DB_ORDERS_PASSWORD,
-			database: process.env.DB_ORDERS_NAME,
-			entities: [OrderModel, NullOrderModel],
-			synchronize: false,
-			ssl: process.env.DB_ORDERS_SSL_MODE === 'require' ? { rejectUnauthorized: false } : false,
 		}),
 		TelegrafModule.forRoot({
 			token: '7506088721:AAF78PYd8iEdw_TAXaZfC7o4IQFy9AcrdHU',
@@ -60,17 +31,6 @@ import { NullOrderModel, OrderModel } from './entities/orders';
 		BeelineApiCallModule,
 		CronJobsModule,
 		AiDeepseekModule,
-		// TypeOrmModule.forRoot({
-		// 	type: 'postgres',
-		// 	host: process.env.DB_HOST,
-		// 	port: parseInt(process.env.DB_PORT),
-		// 	username: process.env.DB_USER,
-		// 	password: process.env.DB_PASSWORD,
-		// 	database: process.env.DB_NAME,
-		// 	entities: [ManagerModel],
-		// 	synchronize: false,
-		// 	ssl: process.env.DB_SSL_MODE === 'require' ? { rejectUnauthorized: false } : false,
-		// }),
 		// ManagersModule,
 		// ClientsModule,
 		// BeelineApiCallModule,

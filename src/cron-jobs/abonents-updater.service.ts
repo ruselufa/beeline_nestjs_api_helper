@@ -3,7 +3,7 @@ import { Cron } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { BeelineApiCallService } from '../beeline_api_call/beeline_api_call.service';
-import { Abonent } from '../entities/abonent.entity';
+import { Abonent } from '../entities/beeline/abonent.entity';
 
 @Injectable()
 export class AbonentsUpdaterService implements OnApplicationBootstrap {

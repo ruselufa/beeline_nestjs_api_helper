@@ -75,6 +75,9 @@ export class AbonentRecord {
 	deepseek_analysed: boolean;
 
 	@Column({ type: 'boolean', default: false })
+	google_sheets_export: boolean;
+
+	@Column({ type: 'boolean', default: false })
 	to_short: boolean;
 
 	@ManyToOne(() => Abonent, (abonent) => abonent.abonentRecords)

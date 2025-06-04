@@ -3,7 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { TranscriptionService } from '../transcription/transcription.service';
 import { BeelineApiCallService } from '../beeline_api_call/beeline_api_call.service';
-import { AbonentRecord } from '../entities/abonent.record.entity';
+import { AbonentRecord } from '../entities/beeline/abonent.record.entity';
 import * as path from 'path';
 import * as fs from 'fs';
 import { MoreThan } from 'typeorm';

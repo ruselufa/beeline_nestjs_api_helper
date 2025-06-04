@@ -8,10 +8,10 @@ import * as fs from 'fs/promises';
 import * as path from 'path';
 import { DeepseekResponse, DeepseekRequestOptions, DeepseekMessage } from './types';
 import { getSalesPrompt, getQualityPrompt } from './prompts';
-import { AnalyzedAi } from '../entities';
+import { AnalyzedAi } from '../entities/beeline/analyzed_ai.entity';
 import { ClientsService } from 'src/clients/clients.service';
-import { AbonentRecord } from 'src/entities/abonent.record.entity';
-import { Abonent } from 'src/entities/abonent.entity';
+import { AbonentRecord } from 'src/entities/beeline/abonent.record.entity';
+import { Abonent } from 'src/entities/beeline/abonent.entity';
 
 @Injectable()
 export class AiDeepseekService implements OnModuleDestroy {

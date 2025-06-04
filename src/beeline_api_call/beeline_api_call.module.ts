@@ -2,8 +2,7 @@ import { Module } from '@nestjs/common';
 import { BeelineApiCallService } from './beeline_api_call.service';
 import { BeelineApiCallController } from './beeline_api_call.controller';
 import { HttpModule } from '@nestjs/axios';
-import { TypeOrmModule } from '@nestjs/typeorm';
-import { AbonentRecord } from '../entities/abonent.record.entity';
+import { DatabaseModule } from '../database/database.module';
 
 @Module({
 	controllers: [BeelineApiCallController],
@@ -11,7 +10,7 @@ import { AbonentRecord } from '../entities/abonent.record.entity';
 	exports: [BeelineApiCallService],
 	imports: [
 		HttpModule,
-		TypeOrmModule.forFeature([AbonentRecord]),
+		DatabaseModule,
 	],
 })
 export class BeelineApiCallModule {}

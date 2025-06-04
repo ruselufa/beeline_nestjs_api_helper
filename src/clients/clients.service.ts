@@ -9,9 +9,9 @@ import { NullOrderModel } from '../entities/orders/null-order.model.entity';
 @Injectable()
 export class ClientsService {
 	constructor(
-		@InjectRepository(OrderModel)
-		@InjectRepository(NullOrderModel)
+		@InjectRepository(OrderModel, 'orders')
 		private readonly orderModelRepository: Repository<OrderModel>,
+		@InjectRepository(NullOrderModel, 'orders')
 		private readonly nullOrderModelRepository: Repository<NullOrderModel>,
 	) { }
 

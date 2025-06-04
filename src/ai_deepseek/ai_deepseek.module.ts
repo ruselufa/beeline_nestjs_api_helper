@@ -1,19 +1,18 @@
 import { Module } from '@nestjs/common';
 import { HttpModule } from '@nestjs/axios';
-import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule } from '@nestjs/config';
 import { AiDeepseekService } from './ai_deepseek.service';
-import { ClientsService } from '../clients/clients.service';
-import { AnalyzedAi } from '../entities';
+import { ClientsModule } from '../clients/clients.module';
+import { DatabaseModule } from '../database/database.module';
 
 @Module({
 	imports: [
 		HttpModule,
 		ConfigModule,
-		TypeOrmModule.forFeature([AnalyzedAi]),
-		TypeOrmModule.forFeature([], 'distributionbot')
+		ClientsModule,
+		DatabaseModule,
 	],
-	providers: [AiDeepseekService, ClientsService],
+	providers: [AiDeepseekService],
 	exports: [AiDeepseekService]
 })
 export class AiDeepseekModule { } 

@@ -1,8 +1,8 @@
 import { Injectable, OnApplicationBootstrap } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { AbonentRecord } from '../entities/abonent.record.entity';
-import { Abonent } from '../entities/abonent.entity';
+import { AbonentRecord } from '../entities/beeline/abonent.record.entity';
+import { Abonent } from '../entities/beeline/abonent.entity';
 import { BeelineApiCallService } from '../beeline_api_call/beeline_api_call.service';
 import { Cron } from '@nestjs/schedule';
 

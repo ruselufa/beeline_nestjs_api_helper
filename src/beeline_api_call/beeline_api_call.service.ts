@@ -4,7 +4,7 @@ import { firstValueFrom } from 'rxjs';
 import { AxiosError } from 'axios';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { AbonentRecord } from '../entities/abonent.record.entity';
+import { AbonentRecord } from '../entities/beeline/abonent.record.entity';
 import {
 	AbonentsResponse,
 	ApiErrorResponse,
