@@ -3,7 +3,7 @@ export type CreateAnalyzedAiDto = {
 	department: string;
 	originalText: string;
 	analysisResult: Record<string, any>;
-	clientId: number;
+	clientId?: number;
 	clientName?: string;
 	clientPhone?: string;
 	clientEmail?: string;
