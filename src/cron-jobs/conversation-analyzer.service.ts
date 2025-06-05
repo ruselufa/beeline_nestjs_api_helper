@@ -1,5 +1,8 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 import { AiDeepseekService } from '../ai_deepseek/ai_deepseek.service';
+import { AbonentRecord } from '../entities/beeline/abonent.record.entity';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 
@@ -10,12 +13,16 @@ export class ConversationAnalyzerService implements OnModuleInit {
 	private readonly exportJsonDir = path.join(process.cwd(), 'export', 'json');
 	private isProcessing = false;
 
-	constructor(private aiDeepseekService: AiDeepseekService) { }
+	constructor(
+		private aiDeepseekService: AiDeepseekService,
+		@InjectRepository(AbonentRecord)
+		private readonly abonentRecordRepository: Repository<AbonentRecord>
+	) { }
 
 	async onModuleInit() {
 		this.logger.log('Инициализация сервиса анализа разговоров...');
-		// await this.ensureDirectories();
-		// await this.processFiles();
+		await this.ensureDirectories();
+		await this.processFiles();
 	}
 
 	private async ensureDirectories() {
@@ -83,6 +90,7 @@ export class ConversationAnalyzerService implements OnModuleInit {
 			// 185547108_client_9060845434.txt
 			const clientPhone = filename.split('_')[2].split('.')[0];
 			const recordId = filename.split('_')[0];
+			
 			// Анализируем разговор
 			const result = await this.aiDeepseekService.analyzeConversationFile(inputPath, clientPhone, recordId);
 
@@ -93,8 +101,25 @@ export class ConversationAnalyzerService implements OnModuleInit {
 				'utf-8'
 			);
 
-			this.logger.log(`Файл ${filename} успешно обработан. Результат сохранен в ${outputPath}`);
+			// Обновляем запись в БД - помечаем как проанализированную
+			try {
+				const abonentRecord = await this.abonentRecordRepository.findOne({
+					where: { beelineId: recordId }
+				});
 
+				if (abonentRecord) {
+					abonentRecord.deepseek_analysed = true;
+					await this.abonentRecordRepository.save(abonentRecord);
+					this.logger.log(`✓ Запись ${recordId} помечена как проанализированная в БД`);
+				} else {
+					this.logger.warn(`⚠️ Запись с beelineId ${recordId} не найдена в БД`);
+				}
+			} catch (dbError) {
+				this.logger.error(`❌ Ошибка обновления БД для записи ${recordId}: ${dbError.message}`);
+			}
+
+			this.logger.log(`Файл ${filename} успешно обработан. Результат сохранен в ${outputPath}`);
+			
 			// Опционально: перемещаем обработанный файл в архив или удаляем
 			// await fs.unlink(inputPath);
 

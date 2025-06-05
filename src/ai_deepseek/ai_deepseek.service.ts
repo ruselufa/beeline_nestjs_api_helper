@@ -47,7 +47,7 @@ export class AiDeepseekService implements OnModuleDestroy {
 			: getSalesPrompt();
 	}
 
-	async analyzeConversation(text: string, clientPhone: string, abonentDepartment: string): Promise<any> {
+	async analyzeConversation(text: string, clientPhone: string, abonentDepartment: string, recordId?: number): Promise<any> {
 		try {
 			this.logger.log(`Начинаем анализ разговора для клиента`);
 
@@ -91,17 +91,30 @@ export class AiDeepseekService implements OnModuleDestroy {
 
 			const analysisResult = response.data.choices[0].message.content;
 
+			// Улучшенный парсинг JSON
+			let parsedResult;
+			try {
+				// Пытаемся найти JSON в ответе
+				const jsonMatch = analysisResult.match(/\{[\s\S]*\}/);
+				if (jsonMatch) {
+					parsedResult = JSON.parse(jsonMatch[0]);
+				} else {
+					// Если JSON не найден, пытаемся парсить весь ответ
+					parsedResult = JSON.parse(analysisResult);
+				}
+			} catch (parseError) {
+				this.logger.warn(`Не удалось распарсить JSON ответ: ${parseError.message}`);
+				// Сохраняем как строку если парсинг не удался
+				parsedResult = { raw_response: analysisResult };
+			}
+
 			// Сохраняем результат в БД
 			const createAnalyzedAiDto: CreateAnalyzedAiDto = {
-				conversationId: `conv_${Date.now().toString()}`,
+				conversationId: `conv_${recordId || Date.now().toString()}`,
 				department: abonentDepartment,
 				originalText: text,
-				analysisResult: typeof analysisResult === 'string' ?
-					JSON.parse(analysisResult) : analysisResult,
-				// clientId: clientId,
-				// clientName: clientName,
+				analysisResult: parsedResult,
 				clientPhone: clientPhone,
-				// clientEmail: clientEmail
 			}
 
 			await this.analyzedAiRepository.save(createAnalyzedAiDto);
@@ -119,9 +132,22 @@ export class AiDeepseekService implements OnModuleDestroy {
 	async analyzeConversationFile(filePath: string, clientPhone: string, recordId): Promise<any> {
 		try {
 			const fileContent = await fs.readFile(filePath, 'utf-8');
-			const record = await this.abonentRecordRepository.findOne({ where: { id: recordId } });
-			const abonentDepartment = await this.abonentRepository.findOne({ where: { id: Number(record.abonent) } });
-			return await this.analyzeConversation(fileContent, clientPhone, abonentDepartment.department);
+			const record = await this.abonentRecordRepository.findOne({ 
+				where: { beelineId: recordId },
+				relations: ['abonent']
+			});
+			
+			if (!record) {
+				this.logger.error(`Запись с beelineId ${recordId} не найдена в базе данных`);
+				throw new Error(`Record not found: ${recordId}`);
+			}
+			
+			if (!record.abonent) {
+				this.logger.error(`Связанный абонент не найден для записи ${recordId}`);
+				throw new Error(`Abonent not found for record: ${recordId}`);
+			}
+			
+			return await this.analyzeConversation(fileContent, clientPhone, record.abonent.department, record.id);
 		} catch (error) {
 			this.logger.error(`Ошибка при обработке файла ${filePath}: ${error.message}`);
 			throw error;

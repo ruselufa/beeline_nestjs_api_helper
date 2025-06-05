@@ -14,6 +14,7 @@ import { ConfigModule } from '@nestjs/config';
 import { DatabaseModule } from './database/database.module';
 import { CronJobsModule } from './cron-jobs/cron-jobs.module';
 import { AiDeepseekModule } from './ai_deepseek/ai_deepseek.module';
+import { GoogleSheetsModule } from './google-sheets/google-sheets.module';
 
 @Module({
 	imports: [
@@ -31,6 +32,7 @@ import { AiDeepseekModule } from './ai_deepseek/ai_deepseek.module';
 		BeelineApiCallModule,
 		CronJobsModule,
 		AiDeepseekModule,
+		GoogleSheetsModule,
 		// ManagersModule,
 		// ClientsModule,
 		// BeelineApiCallModule,

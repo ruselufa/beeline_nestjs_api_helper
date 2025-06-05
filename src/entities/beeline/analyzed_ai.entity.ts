@@ -17,7 +17,7 @@ export class AnalyzedAi {
 	@Column('jsonb')
 	analysisResult: Record<string, any>;
 
-	@Column()
+	@Column({ nullable: true })
 	clientId: number;
 
 	@Column({ nullable: true })
