@@ -38,6 +38,45 @@ export class GoogleSheetsService {
 		}
 	}
 
+	private async expandSheet(sheet: any, requiredColumns: number): Promise<void> {
+		try {
+			const currentProperties = sheet.gridProperties;
+			if (currentProperties.columnCount < requiredColumns) {
+				this.logger.log(`Расширяем таблицу с ${currentProperties.columnCount} до ${requiredColumns} колонок...`);
+				
+				// Получаем доступ к spreadsheet
+				const spreadsheet = await this.initializeSpreadsheet();
+				
+				// Создаем новый лист с нужным количеством колонок
+				const newSheet = await spreadsheet.addSheet({
+					title: 'Call Analysis New',
+					gridProperties: {
+						rowCount: 1000,
+						columnCount: requiredColumns,
+						frozenRowCount: 1
+					}
+				});
+				
+				// Копируем данные из старого листа
+				const oldData = await sheet.getRows();
+				if (oldData && oldData.length > 0) {
+					await newSheet.addRows(oldData);
+				}
+				
+				// Удаляем старый лист
+				await sheet.delete();
+				
+				// Переименовываем новый лист
+				await newSheet.updateProperties({ title: 'Call Analysis' });
+				
+				this.logger.log('Таблица успешно расширена');
+			}
+		} catch (error) {
+			this.logger.error(`Ошибка при расширении таблицы: ${error.message}`);
+			throw error;
+		}
+	}
+
 	async initializeTable(): Promise<void> {
 		try {
 			const spreadsheet = await this.initializeSpreadsheet();
@@ -54,20 +93,15 @@ export class GoogleSheetsService {
 					gridProperties: {
 						rowCount: 1000,
 						columnCount: headers.length,
-						frozenRowCount: 1 // Фиксируем первую строку
+						frozenRowCount: 1
 					}
 				});
 				this.logger.log('Создан новый лист с заголовками');
 			} else {
-				// Проверяем количество колонок
-				const currentProperties = sheet.gridProperties;
-				if (currentProperties.columnCount < headers.length) {
-					this.logger.warn(`Внимание: существующий лист имеет ${currentProperties.columnCount} колонок, а требуется ${headers.length}. 
-						Некоторые заголовки не будут установлены. Рекомендуется создать новый лист вручную.`);
-					
-					// Ограничиваем количество заголовков текущим размером листа
-					headers.length = currentProperties.columnCount;
-				}
+				// Расширяем таблицу если нужно
+				await this.expandSheet(sheet, headers.length);
+				// Получаем обновленный лист
+				sheet = spreadsheet.sheetsByIndex[0];
 			}
 			
 			// Загружаем ячейки для проверки и форматирования заголовков
