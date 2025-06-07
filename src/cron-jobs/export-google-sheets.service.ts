@@ -34,6 +34,15 @@ export class ExportGoogleSheetsService implements OnApplicationBootstrap {
         const isConnected = await this.googleSheetsService.testConnection();
         if (isConnected) {
             this.logger.log('✓ Подключение к Google Sheets успешно установлено');
+            
+            // Инициализируем таблицу
+            try {
+                await this.googleSheetsService.initializeTable();
+                this.logger.log('✓ Таблица успешно инициализирована');
+            } catch (error) {
+                this.logger.error(`❌ Ошибка инициализации таблицы: ${error.message}`);
+                return;
+            }
         } else {
             this.logger.error('❌ Не удалось подключиться к Google Sheets');
             return;

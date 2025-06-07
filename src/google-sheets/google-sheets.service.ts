@@ -38,6 +38,85 @@ export class GoogleSheetsService {
 		}
 	}
 
+	async initializeTable(): Promise<void> {
+		try {
+			const spreadsheet = await this.initializeSpreadsheet();
+			const headers = await this.configService.getHeaders();
+			
+			// Получаем существующий лист
+			let sheet = spreadsheet.sheetsByIndex[0];
+			
+			if (!sheet) {
+				// Если листа нет, создаем новый
+				sheet = await spreadsheet.addSheet({ 
+					title: 'Call Analysis',
+					headerValues: headers,
+					gridProperties: {
+						rowCount: 1000,
+						columnCount: headers.length,
+						frozenRowCount: 1 // Фиксируем первую строку
+					}
+				});
+				this.logger.log('Создан новый лист с заголовками');
+			} else {
+				// Проверяем количество колонок
+				const currentProperties = sheet.gridProperties;
+				if (currentProperties.columnCount < headers.length) {
+					this.logger.warn(`Внимание: существующий лист имеет ${currentProperties.columnCount} колонок, а требуется ${headers.length}. 
+						Некоторые заголовки не будут установлены. Рекомендуется создать новый лист вручную.`);
+					
+					// Ограничиваем количество заголовков текущим размером листа
+					headers.length = currentProperties.columnCount;
+				}
+			}
+			
+			// Загружаем ячейки для проверки и форматирования заголовков
+			await sheet.loadCells();
+			
+			// Проверяем и обновляем заголовки если нужно
+			let needUpdate = false;
+			for (let i = 0; i < headers.length; i++) {
+				const cell = sheet.getCell(0, i);
+				if (cell.value !== headers[i]) {
+					needUpdate = true;
+					break;
+				}
+			}
+			
+			if (needUpdate) {
+				this.logger.log('Обновляем заголовки таблицы...');
+				
+				// Форматируем заголовки
+				for (let i = 0; i < headers.length; i++) {
+					const cell = sheet.getCell(0, i);
+					cell.value = headers[i];
+					
+					// Форматирование текста
+					cell.textFormat = { 
+						bold: true,
+						fontSize: 11
+					};
+					
+					// Форматирование ячейки
+					cell.backgroundColor = { red: 0.95, green: 0.95, blue: 0.95 };
+					cell.horizontalAlignment = 'CENTER';
+					cell.verticalAlignment = 'MIDDLE';
+					cell.wrapStrategy = 'WRAP';
+				}
+				
+				await sheet.saveUpdatedCells();
+				this.logger.log('Заголовки успешно обновлены и отформатированы');
+			} else {
+				this.logger.log('Заголовки уже актуальны');
+			}
+			
+			this.logger.log('Таблица успешно инициализирована');
+		} catch (error) {
+			this.logger.error(`Ошибка инициализации таблицы: ${error.message}`);
+			throw error;
+		}
+	}
+
 	async writeRow(data: GoogleSheetsRow): Promise<WriteResult> {
 		try {
 			const spreadsheet = await this.initializeSpreadsheet();
