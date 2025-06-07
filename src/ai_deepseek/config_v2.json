@@ -1,0 +1,69 @@
+{
+  "blocks": [
+    {
+      "name": "call_info",
+      "headers": [
+        "record_id",
+        "call_date",
+        "department",
+        "manager_name",
+        "client_name",
+        "client_occupation",
+        "call_purpose",
+        "training_name",
+        "payment_agreements",
+        "additional_info"
+      ]
+    },
+    {
+      "name": "stage_assessment",
+      "headers": [
+        "greeting_score",
+        "greeting_good",
+        "greeting_improve",
+        "greeting_recommendation",
+        "programming_score",
+        "programming_good",
+        "programming_improve",
+        "programming_recommendation",
+        "needs_score",
+        "needs_good",
+        "needs_improve",
+        "needs_recommendation",
+        "summary_score",
+        "summary_good",
+        "summary_improve",
+        "summary_recommendation",
+        "presentation_score",
+        "presentation_good",
+        "presentation_improve",
+        "presentation_recommendation",
+        "objections_score",
+        "objections_good",
+        "objections_improve",
+        "objections_recommendation",
+        "closure_score",
+        "closure_good",
+        "closure_improve",
+        "closure_recommendation"
+      ]
+    },
+    {
+      "name": "overall_assessment",
+      "headers": [
+        "total_score",
+        "overall_good",
+        "overall_improve",
+        "overall_recommendations"
+      ]
+    },
+    {
+      "name": "recommendation_template",
+      "headers": [
+        "recommendation_greeting",
+        "recommendation_points",
+        "recommendation_closing"
+      ]
+    }
+  ]
+} 

@@ -3,69 +3,83 @@ export interface GoogleSheetsConfig {
 	spreadsheet_id: string;
 }
 
-export interface TableBlock {
-	blockName: string;
-	headers: TableHeader[];
-}
-
 export interface TableHeader {
 	id: string;
 	label: string;
+	type: string;
+	value: any;
+}
+
+export interface TableBlock {
+	blockName: string;
+	headers: TableHeader[];
 }
 
 export interface TableConfig {
 	blocks: TableBlock[];
 }
 
+export interface TableData {
+	blocks: TableBlock[];
+}
+
 export interface GoogleSheetsRow {
-	record_id: string;
-	call_date: string;
-	department: string;
-	abonent_name: string;
-	abonent_phone: string;
+	// Базовая структура для плоских данных
+	record_id?: string;
+	call_date?: string;
+	department?: string;
+	abonent_name?: string;
+	abonent_phone?: string;
 	client_email?: string;
 	client_name?: string;
 	client_gc_id_link?: string;
-	duration_seconds: number;
-	// Client data
-	orders?: string;
-	null_orders?: string;
-	
-	// AI analysis fields based on config.json
-	sale_probability?: number;
-	rating_explanation_1?: string;
-	conversation_result?: string;
-	detailed_summary?: string;
-	attitude?: number;
-	rating_explanation_2?: string;
-	facts?: string;
-	needs?: string;
-	objections?: string;
-	politeness?: number;
-	rating_explanation_3?: string;
-	presentation?: number;
-	rating_explanation_4?: string;
-	objection_handling?: number;
-	rating_explanation_5?: string;
-	mop_advice?: string;
-	
-	// Additional fields from config.json
-	greeting?: number;
-	call_purpose?: number;
-	full_dialog_structure?: number;
-	needs_identification?: number;
-	client_summary?: number;
-	product_presentation?: number;
-	format_presentation?: number;
-	price_presentation?: number;
-	feedback_removal?: number;
-	objection_agreement?: number;
-	true_objection_reveal?: number;
-	objection_processing?: number;
-	deal_closure?: number;
-	active_listening?: number;
-	next_step?: number;
-	manager_active_position?: number;
+	orders?: string[];
+	null_orders?: string[];
+	duration_seconds?: number;
+	manager_name?: string;
+	client_occupation?: string;
+	call_purpose?: string;
+	training_name?: string;
+	payment_agreements?: string;
+	additional_info?: string;
+	greeting_score?: number;
+	greeting_good?: string[];
+	greeting_improve?: string[];
+	greeting_recommendation?: string;
+	programming_score?: number;
+	programming_good?: string[];
+	programming_improve?: string[];
+	programming_recommendation?: string;
+	needs_score?: number;
+	needs_good?: string[];
+	needs_improve?: string[];
+	needs_recommendation?: string;
+	summary_score?: number;
+	summary_good?: string[];
+	summary_improve?: string[];
+	summary_recommendation?: string;
+	presentation_score?: number;
+	presentation_good?: string[];
+	presentation_improve?: string[];
+	presentation_recommendation?: string;
+	objections_score?: number;
+	objections_good?: string[];
+	objections_improve?: string[];
+	objections_recommendation?: string;
+	closure_score?: number;
+	closure_good?: string[];
+	closure_improve?: string[];
+	closure_recommendation?: string;
+	total_score?: number;
+	overall_good?: string;
+	overall_improve?: string;
+	overall_recommendations?: string;
+	recommendation_greeting?: string;
+	recommendation_points?: string;
+	recommendation_closing?: string;
+
+	// Структура для данных из JSON файла
+	table?: TableData;
 }
 
 export interface GoogleSheetsCredentials {

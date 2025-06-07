@@ -5,89 +5,129 @@ import { GoogleSheetsConfigService } from './google-sheets-config.service';
 import { GoogleSheetsRow, WriteResult } from './types/google-sheets.types';
 import * as fs from 'fs/promises';
 import * as path from 'path';
+import { google } from 'googleapis';
 
 @Injectable()
 export class GoogleSheetsService {
 	private readonly logger = new Logger(GoogleSheetsService.name);
-	private spreadsheet: GoogleSpreadsheet | null = null;
+	private spreadsheet: GoogleSpreadsheet;
 
-	constructor(private configService: GoogleSheetsConfigService) {}
+	constructor(
+		private readonly configService: GoogleSheetsConfigService
+	) {}
 
-	async initializeSpreadsheet(): Promise<GoogleSpreadsheet> {
-		if (this.spreadsheet) {
-			return this.spreadsheet;
+	private async mapDataToRow(data: GoogleSheetsRow): Promise<Record<string, any>> {
+		const headers = await this.configService.getHeaders();
+		const rowData: Record<string, any> = {};
+
+		// Если данные пришли в формате блоков (как в JSON файле)
+		if (data.table && Array.isArray(data.table.blocks)) {
+			data.table.blocks.forEach(block => {
+				block.headers.forEach(header => {
+					if (header.type === 'array' && Array.isArray(header.value)) {
+						rowData[header.id] = header.value.join(', ');
+					} else {
+						rowData[header.id] = header.value;
+					}
+				});
+			});
+		} else {
+			// Если данные пришли в плоском формате
+			// Базовые поля
+			rowData.record_id = data.record_id || '';
+			rowData.call_date = data.call_date || '';
+			rowData.department = data.department || '';
+			rowData.abonent_name = data.abonent_name || '';
+			rowData.abonent_phone = data.abonent_phone || '';
+			rowData.client_email = data.client_email || '';
+			rowData.client_name = data.client_name || '';
+			rowData.client_gc_id_link = data.client_gc_id_link || '';
+			rowData.orders = Array.isArray(data.orders) ? data.orders.join(', ') : '';
+			rowData.null_orders = Array.isArray(data.null_orders) ? data.null_orders.join(', ') : '';
+			rowData.duration_seconds = data.duration_seconds || '';
+
+			// Основная информация о звонке
+			rowData.manager_name = data.manager_name || '';
+			rowData.client_occupation = data.client_occupation || '';
+			rowData.call_purpose = data.call_purpose || '';
+			rowData.training_name = data.training_name || '';
+			rowData.payment_agreements = data.payment_agreements || '';
+			rowData.additional_info = data.additional_info || '';
+
+			// Оценка этапов звонка
+			rowData.greeting_score = data.greeting_score || '';
+			rowData.greeting_good = Array.isArray(data.greeting_good) ? data.greeting_good.join(', ') : '';
+			rowData.greeting_improve = Array.isArray(data.greeting_improve) ? data.greeting_improve.join(', ') : '';
+			rowData.greeting_recommendation = data.greeting_recommendation || '';
+
+			rowData.programming_score = data.programming_score || '';
+			rowData.programming_good = Array.isArray(data.programming_good) ? data.programming_good.join(', ') : '';
+			rowData.programming_improve = Array.isArray(data.programming_improve) ? data.programming_improve.join(', ') : '';
+			rowData.programming_recommendation = data.programming_recommendation || '';
+
+			rowData.needs_score = data.needs_score || '';
+			rowData.needs_good = Array.isArray(data.needs_good) ? data.needs_good.join(', ') : '';
+			rowData.needs_improve = Array.isArray(data.needs_improve) ? data.needs_improve.join(', ') : '';
+			rowData.needs_recommendation = data.needs_recommendation || '';
+
+			rowData.summary_score = data.summary_score || '';
+			rowData.summary_good = Array.isArray(data.summary_good) ? data.summary_good.join(', ') : '';
+			rowData.summary_improve = Array.isArray(data.summary_improve) ? data.summary_improve.join(', ') : '';
+			rowData.summary_recommendation = data.summary_recommendation || '';
+
+			rowData.presentation_score = data.presentation_score || '';
+			rowData.presentation_good = Array.isArray(data.presentation_good) ? data.presentation_good.join(', ') : '';
+			rowData.presentation_improve = Array.isArray(data.presentation_improve) ? data.presentation_improve.join(', ') : '';
+			rowData.presentation_recommendation = data.presentation_recommendation || '';
+
+			rowData.objections_score = data.objections_score || '';
+			rowData.objections_good = Array.isArray(data.objections_good) ? data.objections_good.join(', ') : '';
+			rowData.objections_improve = Array.isArray(data.objections_improve) ? data.objections_improve.join(', ') : '';
+			rowData.objections_recommendation = data.objections_recommendation || '';
+
+			rowData.closure_score = data.closure_score || '';
+			rowData.closure_good = Array.isArray(data.closure_good) ? data.closure_good.join(', ') : '';
+			rowData.closure_improve = Array.isArray(data.closure_improve) ? data.closure_improve.join(', ') : '';
+			rowData.closure_recommendation = data.closure_recommendation || '';
+
+			// Общая оценка
+			rowData.total_score = data.total_score || '';
+			rowData.overall_good = data.overall_good || '';
+			rowData.overall_improve = data.overall_improve || '';
+			rowData.overall_recommendations = data.overall_recommendations || '';
+
+			// Шаблон рекомендаций
+			rowData.recommendation_greeting = data.recommendation_greeting || '';
+			rowData.recommendation_points = data.recommendation_points || '';
+			rowData.recommendation_closing = data.recommendation_closing || '';
 		}
 
-		try {
-			const credentials = await this.configService.getCredentials();
-			const spreadsheetId = await this.configService.getSpreadsheetId();
+		return rowData;
+	}
 
+	async initializeTable(): Promise<void> {
+		try {
+			const config = await this.configService.getGoogleSheetsConfig();
+			const headers = await this.configService.getHeaders();
+			const credentials = await this.configService.getCredentials();
+			
+			this.logger.log(`Получены заголовки: ${headers.join(', ')}`);
+			
+			// Настраиваем аутентификацию
 			const auth = new GoogleAuth({
 				credentials: credentials,
 				scopes: ['https://www.googleapis.com/auth/spreadsheets']
 			});
 
-			this.spreadsheet = new GoogleSpreadsheet(spreadsheetId, auth);
+			// Инициализируем таблицу
+			this.spreadsheet = new GoogleSpreadsheet(config.spreadsheet_id, auth);
 			await this.spreadsheet.loadInfo();
 
-			this.logger.log(`Инициализирована Google таблица: ${this.spreadsheet.title}`);
-			return this.spreadsheet;
-		} catch (error) {
-			this.logger.error(`Ошибка инициализации Google Sheets: ${error.message}`);
-			throw error;
-		}
-	}
-
-	private async expandSheet(sheet: any, requiredColumns: number): Promise<void> {
-		try {
-			const currentProperties = sheet.gridProperties;
-			if (currentProperties.columnCount < requiredColumns) {
-				this.logger.log(`Расширяем таблицу с ${currentProperties.columnCount} до ${requiredColumns} колонок...`);
-				
-				// Получаем доступ к spreadsheet
-				const spreadsheet = await this.initializeSpreadsheet();
-				
-				// Создаем новый лист с нужным количеством колонок
-				const newSheet = await spreadsheet.addSheet({
-					title: 'Call Analysis New',
-					gridProperties: {
-						rowCount: 1000,
-						columnCount: requiredColumns,
-						frozenRowCount: 1
-					}
-				});
-				
-				// Копируем данные из старого листа
-				const oldData = await sheet.getRows();
-				if (oldData && oldData.length > 0) {
-					await newSheet.addRows(oldData);
-				}
-				
-				// Удаляем старый лист
-				await sheet.delete();
-				
-				// Переименовываем новый лист
-				await newSheet.updateProperties({ title: 'Call Analysis' });
-				
-				this.logger.log('Таблица успешно расширена');
-			}
-		} catch (error) {
-			this.logger.error(`Ошибка при расширении таблицы: ${error.message}`);
-			throw error;
-		}
-	}
-
-	async initializeTable(): Promise<void> {
-		try {
-			const spreadsheet = await this.initializeSpreadsheet();
-			const headers = await this.configService.getHeaders();
-			
-			// Получаем существующий лист
-			let sheet = spreadsheet.sheetsByIndex[0];
-			
+			// Получаем первый лист
+			let sheet = this.spreadsheet.sheetsByIndex[0];
 			if (!sheet) {
 				// Если листа нет, создаем новый
-				sheet = await spreadsheet.addSheet({ 
+				sheet = await this.spreadsheet.addSheet({
 					title: 'Call Analysis',
 					headerValues: headers,
 					gridProperties: {
@@ -98,64 +138,31 @@ export class GoogleSheetsService {
 				});
 				this.logger.log('Создан новый лист с заголовками');
 			} else {
-				// Расширяем таблицу если нужно
-				await this.expandSheet(sheet, headers.length);
-				// Получаем обновленный лист
-				sheet = spreadsheet.sheetsByIndex[0];
-			}
-			
-			// Загружаем ячейки для проверки и форматирования заголовков
-			await sheet.loadCells();
-			
-			// Проверяем и обновляем заголовки если нужно
-			let needUpdate = false;
-			for (let i = 0; i < headers.length; i++) {
-				const cell = sheet.getCell(0, i);
-				if (cell.value !== headers[i]) {
-					needUpdate = true;
-					break;
-				}
-			}
-			
-			if (needUpdate) {
+				// Обновляем заголовки
 				this.logger.log('Обновляем заголовки таблицы...');
-				
-				// Форматируем заголовки
-				for (let i = 0; i < headers.length; i++) {
-					const cell = sheet.getCell(0, i);
-					cell.value = headers[i];
-					
-					// Форматирование текста
-					cell.textFormat = { 
-						bold: true,
-						fontSize: 11
-					};
-					
-					// Форматирование ячейки
-					cell.backgroundColor = { red: 0.95, green: 0.95, blue: 0.95 };
-					cell.horizontalAlignment = 'CENTER';
-					cell.verticalAlignment = 'MIDDLE';
-					cell.wrapStrategy = 'WRAP';
-				}
-				
-				await sheet.saveUpdatedCells();
-				this.logger.log('Заголовки успешно обновлены и отформатированы');
-			} else {
-				this.logger.log('Заголовки уже актуальны');
+				await sheet.setHeaderRow(headers);
+				this.logger.log('Заголовки обновлены');
 			}
-			
-			this.logger.log('Таблица успешно инициализирована');
+
+			this.logger.log('✓ Таблица успешно инициализирована');
 		} catch (error) {
 			this.logger.error(`Ошибка инициализации таблицы: ${error.message}`);
 			throw error;
 		}
 	}
 
+	private areHeadersValid(currentHeaders: string[], requiredHeaders: string[]): boolean {
+		if (currentHeaders.length !== requiredHeaders.length) {
+			return false;
+		}
+		return currentHeaders.every((header, index) => header === requiredHeaders[index]);
+	}
+
 	async writeRow(data: GoogleSheetsRow): Promise<WriteResult> {
 		try {
-			const spreadsheet = await this.initializeSpreadsheet();
+			const spreadsheet = await this.spreadsheet;
 			
-			// Получаем первый лист или создаем новый
+			// Получаем первый лист
 			let sheet = spreadsheet.sheetsByIndex[0];
 			if (!sheet) {
 				const headers = await this.configService.getHeaders();
@@ -163,13 +170,6 @@ export class GoogleSheetsService {
 					title: 'Call Analysis',
 					headerValues: headers
 				});
-			} else {
-				// Проверяем есть ли заголовки
-				await sheet.loadHeaderRow();
-				if (sheet.headerValues.length === 0) {
-					const headers = await this.configService.getHeaders();
-					await sheet.setHeaderRow(headers);
-				}
 			}
 
 			// Преобразуем данные в массив значений согласно заголовкам
@@ -195,7 +195,7 @@ export class GoogleSheetsService {
 
 	async writeMultipleRows(dataArray: GoogleSheetsRow[]): Promise<WriteResult> {
 		try {
-			const spreadsheet = await this.initializeSpreadsheet();
+			const spreadsheet = await this.spreadsheet;
 			
 			let sheet = spreadsheet.sheetsByIndex[0];
 			if (!sheet) {
@@ -266,20 +266,9 @@ export class GoogleSheetsService {
 		}
 	}
 
-	private async mapDataToRow(data: GoogleSheetsRow): Promise<any> {
-		const headers = await this.configService.getHeaders();
-		const row: any = {};
-		
-		headers.forEach(header => {
-			row[header] = data[header as keyof GoogleSheetsRow] || '';
-		});
-		
-		return row;
-	}
-
 	async testConnection(): Promise<boolean> {
 		try {
-			await this.initializeSpreadsheet();
+			await this.spreadsheet;
 			this.logger.log('✓ Подключение к Google Sheets успешно');
 			return true;
 		} catch (error) {

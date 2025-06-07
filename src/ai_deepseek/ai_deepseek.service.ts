@@ -8,6 +8,8 @@ import * as fs from 'fs/promises';
 import * as path from 'path';
 import { DeepseekResponse, DeepseekRequestOptions, DeepseekMessage } from './types';
 import { getSalesPrompt, getQualityPrompt } from './prompts';
+import { salesPromptV2 } from './prompts/sales.prompt_v2';
+import { qualityPromptV2 } from './prompts/quality.prompt_v2';
 import { AnalyzedAi } from '../entities/beeline/analyzed_ai.entity';
 // import { ClientsService } from 'src/clients/clients.service';
 import { AbonentRecord } from 'src/entities/beeline/abonent.record.entity';
@@ -43,8 +45,8 @@ export class AiDeepseekService implements OnModuleDestroy {
 
 	private getPromptByDepartment(department: string): string {
 		return department.toLowerCase().includes('Отдел Качества') || department.toLowerCase().includes('Отдел Продукта')
-			? getQualityPrompt()
-			: getSalesPrompt();
+			? qualityPromptV2
+			: salesPromptV2;
 	}
 
 	async analyzeConversation(text: string, clientPhone: string, abonentDepartment: string, recordId?: number): Promise<any> {

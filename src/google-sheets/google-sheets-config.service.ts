@@ -2,7 +2,9 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as fs from 'fs/promises';
 import * as path from 'path';
-import { GoogleSheetsConfig, TableConfig, GoogleSheetsCredentials } from './types/google-sheets.types';
+import { GoogleSheetsConfig, GoogleSheetsCredentials } from './types/google-sheets.types';
+import { TableConfig } from '../ai_deepseek/types/analysis.types';
+import { SHEETS_CONFIG_V2 } from '../ai_deepseek/config/config.sheets_v2';
 
 @Injectable()
 export class GoogleSheetsConfigService {
@@ -43,11 +45,8 @@ export class GoogleSheetsConfigService {
 		}
 
 		try {
-			const configPath = path.join(process.cwd(), 'src', 'ai_deepseek', 'config.json');
-			const configData = await fs.readFile(configPath, 'utf-8');
-			const data = JSON.parse(configData);
-			
-			this.tableConfig = data.table;
+			// Используем SHEETS_CONFIG_V2 вместо загрузки из файла
+			this.tableConfig = SHEETS_CONFIG_V2;
 			this.logger.log('Загружена конфигурация таблицы Google Sheets');
 			
 			return this.tableConfig;
@@ -83,59 +82,26 @@ export class GoogleSheetsConfigService {
 	}
 
 	async getHeaders(): Promise<string[]> {
-		// Базовые заголовки для таблицы
-		const baseHeaders = [
-			'record_id',
-			'call_date', 
-			'department',
-			'abonent_name',
-			'abonent_phone',
-			'client_email',
-			'client_name',
-			'client_gc_id_link',
-			'orders',
-			'null_orders',
-			'duration_seconds'
-		];
-
 		try {
-			// Получаем заголовки из конфигурации AI
-			const tableConfig = await this.getTableConfig();
-			const aiHeaders: string[] = [];
+			// Используем новую конфигурацию SHEETS_CONFIG_V2
+			const headers: string[] = [];
 			
 			// Извлекаем все ID из всех блоков
-			tableConfig.blocks.forEach(block => {
+			SHEETS_CONFIG_V2.blocks.forEach(block => {
+				this.logger.log(`Обрабатываем блок: ${block.blockName}`);
 				block.headers.forEach(header => {
-					aiHeaders.push(header.id);
+					this.logger.log(`Добавляем заголовок: ${header.id} (${header.label})`);
+					if (!headers.includes(header.id)) {
+						headers.push(header.id);
+					}
 				});
 			});
 
-			// Объединяем базовые заголовки с заголовками AI
-			return [...baseHeaders, ...aiHeaders];
+			this.logger.log(`Итоговые заголовки: ${headers.join(', ')}`);
+			return headers;
 		} catch (error) {
-			this.logger.warn(`Не удалось загрузить AI заголовки, используем базовые: ${error.message}`);
-			
-			// Фоллбэк на старые заголовки
-			return [
-				...baseHeaders,
-				// AI analysis fields
-				'sale_probability',
-				'rating_explanation_1',
-				'conversation_result',
-				'detailed_summary',
-				'attitude',
-				'rating_explanation_2',
-				'facts',
-				'needs',
-				'objections',
-				'politeness',
-				'rating_explanation_3',
-				'presentation',
-				'rating_explanation_4',
-				'objection_handling',
-				'rating_explanation_5',
-				'mop_advice'
-			];
+			this.logger.warn(`Не удалось загрузить заголовки: ${error.message}`);
+			return [];
 		}
 	}
 } 

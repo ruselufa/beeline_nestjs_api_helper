@@ -12,6 +12,7 @@ import { GoogleSheetsService } from '../google-sheets/google-sheets.service';
 import { GoogleSheetsRow } from '../google-sheets/types/google-sheets.types';
 import * as fs from 'fs/promises';
 import * as path from 'path';
+import { SHEETS_CONFIG_V2 } from '../ai_deepseek/config/config.sheets_v2';
 
 @Injectable()
 export class ExportGoogleSheetsService implements OnApplicationBootstrap {
@@ -115,10 +116,10 @@ export class ExportGoogleSheetsService implements OnApplicationBootstrap {
                 
                 if (result.success) {
                     // Помечаем записи как экспортированные
-                    for (const record of records.slice(0, rowsToExport.length)) {
-                        record.google_sheets_export = true;
-                        await this.abonentRecordRepository.save(record);
-                    }
+                    // for (const record of records.slice(0, rowsToExport.length)) {
+                    //     record.google_sheets_export = true;
+                    //     await this.abonentRecordRepository.save(record);
+                    // }
                     
                     processedTotal += rowsToExport.length;
                     this.logger.log(`✓ Экспортировано ${rowsToExport.length} записей в Google Sheets`);
@@ -163,67 +164,78 @@ export class ExportGoogleSheetsService implements OnApplicationBootstrap {
             return arr.join('\n');
         };
 
-        // Извлекаем ключевые выводы
-        const keyFindings = arrayToString(jsonData.keyFindings || []);
-        
-        // Формируем детальное резюме
-        const detailedSummary = [
-            `Оценка менеджера: ${jsonData.managerScore}/10`,
-            `Потенциал сделки: ${jsonData.dealPotential}/10`,
-            `Ожидаемая сумма: ${jsonData.estimatedDealAmount}`,
-            '',
-            'Ключевые выводы:',
-            ...jsonData.keyFindings || [],
-            '',
-            'Рекомендации:',
-            ...jsonData.recommendations || [],
-            '',
-            'Следующие шаги:',
-            ...jsonData.nextSteps || []
-        ].join('\n');
+        // Извлекаем данные из JSON
+        const callInfo = jsonData.call_info || {};
+        const stageAssessment = jsonData.stage_assessment || {};
+        const overallAssessment = jsonData.overall_assessment || {};
+        const recommendationTemplate = jsonData.recommendation_template || {};
 
         return {
-            // Продажи и резюме разговора
-            sale_probability: safeNumber(jsonData.dealPotential) * 10, // Преобразуем из 10-балльной шкалы в проценты
-            rating_explanation_1: `Оценка менеджера: ${jsonData.managerScore}/10\nПотенциал сделки: ${jsonData.dealPotential}/10\nОжидаемая сумма: ${jsonData.estimatedDealAmount}`,
-            conversation_result: keyFindings,
-            detailed_summary: detailedSummary,
-            
-            // Настрой клиента, потребности, возражения и факты
-            attitude: safeNumber(jsonData.managerScore) * 10, // Преобразуем из 10-балльной шкалы в проценты
-            rating_explanation_2: `Оценка менеджера: ${jsonData.managerScore}/10\nПотенциал сделки: ${jsonData.dealPotential}/10`,
-            facts: keyFindings,
-            needs: arrayToString(jsonData.recommendations || []),
-            objections: keyFindings,
-            
-            // Работа менеджера и советы
-            politeness: safeNumber(jsonData.managerScore) * 10, // Преобразуем из 10-балльной шкалы в проценты
-            rating_explanation_3: `Оценка менеджера: ${jsonData.managerScore}/10\nПотенциал сделки: ${jsonData.dealPotential}/10`,
-            presentation: safeNumber(jsonData.managerScore) * 10, // Преобразуем из 10-балльной шкалы в проценты
-            rating_explanation_4: `Оценка менеджера: ${jsonData.managerScore}/10\nПотенциал сделки: ${jsonData.dealPotential}/10`,
-            objection_handling: safeNumber(jsonData.managerScore) * 10, // Преобразуем из 10-балльной шкалы в проценты
-            rating_explanation_5: `Оценка менеджера: ${jsonData.managerScore}/10\nПотенциал сделки: ${jsonData.dealPotential}/10`,
-            mop_advice: arrayToString(jsonData.recommendations || []),
-            
-            // Дополнительные аспекты звонка
-            next_step: arrayToString(jsonData.nextSteps || []),
-            
-            // Остальные поля заполняем нулями, так как их нет в JSON
-            greeting: safeNumber(jsonData.managerScore) * 10, // Используем оценку менеджера как базовую оценку
-            call_purpose: safeNumber(jsonData.managerScore) * 10,
-            full_dialog_structure: safeNumber(jsonData.managerScore) * 10,
-            needs_identification: safeNumber(jsonData.managerScore) * 10,
-            client_summary: safeNumber(jsonData.managerScore) * 10,
-            product_presentation: safeNumber(jsonData.managerScore) * 10,
-            format_presentation: safeNumber(jsonData.managerScore) * 10,
-            price_presentation: safeNumber(jsonData.managerScore) * 10,
-            feedback_removal: safeNumber(jsonData.managerScore) * 10,
-            objection_agreement: safeNumber(jsonData.managerScore) * 10,
-            true_objection_reveal: safeNumber(jsonData.managerScore) * 10,
-            objection_processing: safeNumber(jsonData.managerScore) * 10,
-            deal_closure: safeNumber(jsonData.managerScore) * 10,
-            active_listening: safeNumber(jsonData.managerScore) * 10,
-            manager_active_position: safeNumber(jsonData.managerScore) * 10
+            // Основная информация о звонке
+            record_id: callInfo.record_id || '',
+            call_date: callInfo.call_date || '',
+            department: callInfo.department || '',
+            manager_name: callInfo.manager_name || '',
+            client_name: callInfo.client_name || '',
+            client_occupation: callInfo.client_occupation || '',
+            call_purpose: callInfo.call_purpose || '',
+            training_name: callInfo.training_name || '',
+            payment_agreements: callInfo.payment_agreements || '',
+            additional_info: callInfo.additional_info || '',
+
+            // Оценка этапов звонка
+            // Приветствие
+            greeting_score: safeNumber(stageAssessment.greeting?.score),
+            greeting_good: arrayToString(stageAssessment.greeting?.good_points || []),
+            greeting_improve: arrayToString(stageAssessment.greeting?.improvement_points || []),
+            greeting_recommendation: stageAssessment.greeting?.recommendation || '',
+
+            // Программирование
+            programming_score: safeNumber(stageAssessment.programming?.score),
+            programming_good: arrayToString(stageAssessment.programming?.good_points || []),
+            programming_improve: arrayToString(stageAssessment.programming?.improvement_points || []),
+            programming_recommendation: stageAssessment.programming?.recommendation || '',
+
+            // Выявление потребностей
+            needs_score: safeNumber(stageAssessment.needs_identification?.score),
+            needs_good: arrayToString(stageAssessment.needs_identification?.good_points || []),
+            needs_improve: arrayToString(stageAssessment.needs_identification?.improvement_points || []),
+            needs_recommendation: stageAssessment.needs_identification?.recommendation || '',
+
+            // Резюме
+            summary_score: safeNumber(stageAssessment.client_summary?.score),
+            summary_good: arrayToString(stageAssessment.client_summary?.good_points || []),
+            summary_improve: arrayToString(stageAssessment.client_summary?.improvement_points || []),
+            summary_recommendation: stageAssessment.client_summary?.recommendation || '',
+
+            // Презентация
+            presentation_score: safeNumber(stageAssessment.presentation?.score),
+            presentation_good: arrayToString(stageAssessment.presentation?.good_points || []),
+            presentation_improve: arrayToString(stageAssessment.presentation?.improvement_points || []),
+            presentation_recommendation: stageAssessment.presentation?.recommendation || '',
+
+            // Работа с возражениями
+            objections_score: safeNumber(stageAssessment.objection_handling?.score),
+            objections_good: arrayToString(stageAssessment.objection_handling?.good_points || []),
+            objections_improve: arrayToString(stageAssessment.objection_handling?.improvement_points || []),
+            objections_recommendation: stageAssessment.objection_handling?.recommendation || '',
+
+            // Закрытие
+            closure_score: safeNumber(stageAssessment.deal_closure?.score),
+            closure_good: arrayToString(stageAssessment.deal_closure?.good_points || []),
+            closure_improve: arrayToString(stageAssessment.deal_closure?.improvement_points || []),
+            closure_recommendation: stageAssessment.deal_closure?.recommendation || '',
+
+            // Общая оценка
+            total_score: safeNumber(overallAssessment.total_score),
+            overall_good: arrayToString(overallAssessment.strengths || []),
+            overall_improve: arrayToString(overallAssessment.weaknesses || []),
+            overall_recommendations: arrayToString(overallAssessment.recommendations || []),
+
+            // Шаблон рекомендаций
+            recommendation_greeting: recommendationTemplate.greeting || '',
+            recommendation_points: arrayToString(recommendationTemplate.improvement_points || []),
+            recommendation_closing: recommendationTemplate.closing || ''
         };
     }
 
@@ -239,86 +251,57 @@ export class ExportGoogleSheetsService implements OnApplicationBootstrap {
             // Получаем данные клиента
             const clientData = await this.getClientData(record.phone);
             
-            // Ищем JSON файл с анализом по телефону
+            // Получаем данные из JSON файла
             const jsonDir = path.join(process.cwd(), 'export', 'json');
             const files = await fs.readdir(jsonDir);
             const analysisFile = files.find(file => file.includes(`_client_${record.phone}_analysis.json`));
             
-            let analysisData: any = {};
+            let analysisData = null;
             if (analysisFile) {
                 const jsonPath = path.join(jsonDir, analysisFile);
-                this.logger.log(`Найден файл анализа: ${jsonPath}`);
-                
+                const jsonContent = await fs.readFile(jsonPath, 'utf-8');
                 try {
-                    const fileContent = await fs.readFile(jsonPath, 'utf-8');
-                    // JSON файл содержит экранированную JSON строку, нужно дважды парсить
-                    const parsedContent = JSON.parse(fileContent);
-                    analysisData = this.mapAnalysisData(JSON.parse(parsedContent));
-                    this.logger.log(`Данные анализа успешно прочитаны для записи ${record.id}`);
+                    // Удаляем лишние символы в начале и конце файла
+                    const cleanJson = jsonContent.replace(/^```json\n|\n```$/g, '');
+                    analysisData = JSON.parse(cleanJson);
+                    this.logger.log(`Загружены данные анализа из файла ${analysisFile}`);
                 } catch (error) {
-                    this.logger.warn(`Не удалось прочитать файл анализа для записи ${record.id}: ${error.message}`);
-                    // Используем пустые значения как запасной вариант
-                    analysisData = {
-                        sale_probability: 0,
-                        rating_explanation_1: '',
-                        conversation_result: '',
-                        detailed_summary: '',
-                        attitude: 0,
-                        rating_explanation_2: '',
-                        facts: '',
-                        needs: '',
-                        objections: '',
-                        politeness: 0,
-                        rating_explanation_3: '',
-                        presentation: 0,
-                        rating_explanation_4: '',
-                        objection_handling: 0,
-                        rating_explanation_5: '',
-                        mop_advice: '',
-                        greeting: 0,
-                        call_purpose: 0,
-                        full_dialog_structure: 0,
-                        needs_identification: 0,
-                        client_summary: 0,
-                        product_presentation: 0,
-                        format_presentation: 0,
-                        price_presentation: 0,
-                        feedback_removal: 0,
-                        objection_agreement: 0,
-                        true_objection_reveal: 0,
-                        objection_processing: 0,
-                        deal_closure: 0,
-                        active_listening: 0,
-                        next_step: '',
-                        manager_active_position: 0
-                    };
+                    this.logger.error(`Ошибка парсинга JSON файла ${analysisFile}: ${error.message}`);
                 }
-            } else {
-                this.logger.warn(`Файл анализа не найден для телефона ${record.phone}`);
             }
 
             // Формируем строку для экспорта
             const exportRow: GoogleSheetsRow = {
                 record_id: record.id.toString(),
-                call_date: record.date ? new Date(record.date).toISOString() : '',
-                department: abonent?.department || 'Неизвестно',
-                abonent_name: abonent ? `${abonent.firstName} ${abonent.lastName}` : 'Неизвестно',
-                abonent_phone: record.phone || '',
+                call_date: record.date.toISOString(),
+                department: 'Неизвестно',
+                abonent_name: abonent ? `${abonent.firstName} ${abonent.lastName}`.trim() : 'Неизвестно',
+                abonent_phone: record.phone,
                 client_email: clientData.client_email,
                 client_name: clientData.client_name,
                 client_gc_id_link: clientData.client_gc_id_link,
-                orders: clientData.orders,
-                null_orders: clientData.null_orders,
+                orders: JSON.parse(clientData.orders || '[]'),
+                null_orders: JSON.parse(clientData.null_orders || '[]'),
                 duration_seconds: Math.floor(record.duration / 1000),
-                
-                // AI analysis fields
-                ...analysisData
             };
 
+            // Если есть данные анализа, добавляем их
+            if (analysisData && analysisData.table) {
+                // Преобразуем данные из JSON в формат GoogleSheetsRow
+                analysisData.table.blocks.forEach(block => {
+                    block.headers.forEach(header => {
+                        if (header.type === 'array' && Array.isArray(header.value)) {
+                            exportRow[header.id] = header.value.join(', ');
+                        } else {
+                            exportRow[header.id] = header.value;
+                        }
+                    });
+                });
+            }
+
             return exportRow;
-            
         } catch (error) {
-            this.logger.error(`Ошибка подготовки записи ${record.id} для экспорта: ${error.message}`);
+            this.logger.error(`Ошибка подготовки записи ${record.id}: ${error.message}`);
             return null;
         }
     }
