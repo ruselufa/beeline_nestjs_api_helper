@@ -22,17 +22,30 @@ export class GoogleSheetsService {
 
 		// Если данные пришли в формате блоков (как в JSON файле)
 		if (data.table && Array.isArray(data.table.blocks)) {
-			data.table.blocks.forEach(block => {
-				block.headers.forEach(header => {
-					if (header.type === 'array' && Array.isArray(header.value)) {
-						rowData[header.id] = header.value.join(', ');
-					} else {
-						rowData[header.id] = header.value;
-					}
-				});
+			this.logger.log('Обработка данных в формате блоков...');
+			
+			data.table.blocks.forEach((block, blockIndex) => {
+				this.logger.log(`Обработка блока ${blockIndex + 1}: ${block.blockName}`);
+				
+				if (Array.isArray(block.headers)) {
+					block.headers.forEach(header => {
+						try {
+							const value = header.value;
+							if (header.type === 'array' && Array.isArray(value)) {
+								rowData[header.id] = value.join(', ');
+							} else {
+								rowData[header.id] = value;
+							}
+							this.logger.log(`Добавлено поле ${header.id}: ${rowData[header.id]}`);
+						} catch (error) {
+							this.logger.error(`Ошибка при обработке поля ${header.id}: ${error.message}`);
+						}
+					});
+				}
 			});
 		} else {
-			// Если данные пришли в плоском формате
+			this.logger.log('Обработка данных в плоском формате...');
+			
 			// Базовые поля
 			rowData.record_id = data.record_id || '';
 			rowData.call_date = data.call_date || '';
@@ -92,15 +105,18 @@ export class GoogleSheetsService {
 
 			// Общая оценка
 			rowData.total_score = data.total_score || '';
-			rowData.overall_good = data.overall_good || '';
-			rowData.overall_improve = data.overall_improve || '';
-			rowData.overall_recommendations = data.overall_recommendations || '';
+			rowData.overall_good = Array.isArray(data.overall_good) ? data.overall_good.join(', ') : '';
+			rowData.overall_improve = Array.isArray(data.overall_improve) ? data.overall_improve.join(', ') : '';
+			rowData.overall_recommendations = Array.isArray(data.overall_recommendations) ? data.overall_recommendations.join(', ') : '';
 
 			// Шаблон рекомендаций
 			rowData.recommendation_greeting = data.recommendation_greeting || '';
-			rowData.recommendation_points = data.recommendation_points || '';
+			rowData.recommendation_points = Array.isArray(data.recommendation_points) ? data.recommendation_points.join(', ') : '';
 			rowData.recommendation_closing = data.recommendation_closing || '';
 		}
+
+		this.logger.log('Подготовленные данные для записи в таблицу:');
+		this.logger.log(JSON.stringify(rowData, null, 2));
 
 		return rowData;
 	}

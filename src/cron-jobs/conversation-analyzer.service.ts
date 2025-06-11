@@ -93,15 +93,99 @@ export class ConversationAnalyzerService implements OnModuleInit {
 			
 			// Анализируем разговор
 			const result = await this.aiDeepseekService.analyzeConversationFile(inputPath, clientPhone, recordId);
+			
+			this.logger.log('Получен результат от Deepseek:');
+			this.logger.log(JSON.stringify(result, null, 2));
 
-			// Сохраняем результат
+			// Структурируем результат анализа
+			const structuredResult = {
+				record_id: recordId,
+				client_phone: clientPhone,
+				analysis_date: new Date().toISOString(),
+				table: {
+					blocks: [
+						{
+							blockName: 'Основная информация о звонке',
+							headers: [
+								{ id: 'manager_name', type: 'string', value: result.manager_name || '' },
+								{ id: 'client_occupation', type: 'string', value: result.client_occupation || '' },
+								{ id: 'call_purpose', type: 'string', value: result.call_purpose || '' },
+								{ id: 'training_name', type: 'string', value: result.training_name || '' },
+								{ id: 'payment_agreements', type: 'string', value: result.payment_agreements || '' },
+								{ id: 'additional_info', type: 'string', value: result.additional_info || '' }
+							]
+						},
+						{
+							blockName: 'Оценка этапов звонка',
+							headers: [
+								{ id: 'greeting_score', type: 'string', value: result.greeting_score || '' },
+								{ id: 'greeting_good', type: 'array', value: Array.isArray(result.greeting_good) ? result.greeting_good : [] },
+								{ id: 'greeting_improve', type: 'array', value: Array.isArray(result.greeting_improve) ? result.greeting_improve : [] },
+								{ id: 'greeting_recommendation', type: 'string', value: result.greeting_recommendation || '' },
+								
+								{ id: 'programming_score', type: 'string', value: result.programming_score || '' },
+								{ id: 'programming_good', type: 'array', value: Array.isArray(result.programming_good) ? result.programming_good : [] },
+								{ id: 'programming_improve', type: 'array', value: Array.isArray(result.programming_improve) ? result.programming_improve : [] },
+								{ id: 'programming_recommendation', type: 'string', value: result.programming_recommendation || '' },
+								
+								{ id: 'needs_score', type: 'string', value: result.needs_score || '' },
+								{ id: 'needs_good', type: 'array', value: Array.isArray(result.needs_good) ? result.needs_good : [] },
+								{ id: 'needs_improve', type: 'array', value: Array.isArray(result.needs_improve) ? result.needs_improve : [] },
+								{ id: 'needs_recommendation', type: 'string', value: result.needs_recommendation || '' },
+								
+								{ id: 'summary_score', type: 'string', value: result.summary_score || '' },
+								{ id: 'summary_good', type: 'array', value: Array.isArray(result.summary_good) ? result.summary_good : [] },
+								{ id: 'summary_improve', type: 'array', value: Array.isArray(result.summary_improve) ? result.summary_improve : [] },
+								{ id: 'summary_recommendation', type: 'string', value: result.summary_recommendation || '' },
+								
+								{ id: 'presentation_score', type: 'string', value: result.presentation_score || '' },
+								{ id: 'presentation_good', type: 'array', value: Array.isArray(result.presentation_good) ? result.presentation_good : [] },
+								{ id: 'presentation_improve', type: 'array', value: Array.isArray(result.presentation_improve) ? result.presentation_improve : [] },
+								{ id: 'presentation_recommendation', type: 'string', value: result.presentation_recommendation || '' },
+								
+								{ id: 'objections_score', type: 'string', value: result.objections_score || '' },
+								{ id: 'objections_good', type: 'array', value: Array.isArray(result.objections_good) ? result.objections_good : [] },
+								{ id: 'objections_improve', type: 'array', value: Array.isArray(result.objections_improve) ? result.objections_improve : [] },
+								{ id: 'objections_recommendation', type: 'string', value: result.objections_recommendation || '' },
+								
+								{ id: 'closure_score', type: 'string', value: result.closure_score || '' },
+								{ id: 'closure_good', type: 'array', value: Array.isArray(result.closure_good) ? result.closure_good : [] },
+								{ id: 'closure_improve', type: 'array', value: Array.isArray(result.closure_improve) ? result.closure_improve : [] },
+								{ id: 'closure_recommendation', type: 'string', value: result.closure_recommendation || '' }
+							]
+						},
+						{
+							blockName: 'Общая оценка',
+							headers: [
+								{ id: 'total_score', type: 'string', value: result.total_score || '' },
+								{ id: 'overall_good', type: 'array', value: Array.isArray(result.overall_good) ? result.overall_good : [] },
+								{ id: 'overall_improve', type: 'array', value: Array.isArray(result.overall_improve) ? result.overall_improve : [] },
+								{ id: 'overall_recommendations', type: 'array', value: Array.isArray(result.overall_recommendations) ? result.overall_recommendations : [] }
+							]
+						},
+						{
+							blockName: 'Шаблон рекомендаций',
+							headers: [
+								{ id: 'recommendation_greeting', type: 'string', value: result.recommendation_greeting || '' },
+								{ id: 'recommendation_points', type: 'array', value: Array.isArray(result.recommendation_points) ? result.recommendation_points : [] },
+								{ id: 'recommendation_closing', type: 'string', value: result.recommendation_closing || '' }
+							]
+						}
+					]
+				}
+			};
+
+			this.logger.log('Подготовленный структурированный результат:');
+			this.logger.log(JSON.stringify(structuredResult, null, 2));
+
+			// Сохраняем структурированный результат
 			await fs.writeFile(
 				outputPath,
-				JSON.stringify(result, null, 2),
+				JSON.stringify(structuredResult, null, 2),
 				'utf-8'
 			);
 
-			// Обновляем запись в БД - помечаем как проанализированную
+			// Обновляем запись в БД - помечаем как проанализированную и сохраняем результат
 			try {
 				const abonentRecord = await this.abonentRecordRepository.findOne({
 					where: { beelineId: recordId }
@@ -109,8 +193,9 @@ export class ConversationAnalyzerService implements OnModuleInit {
 
 				if (abonentRecord) {
 					abonentRecord.deepseek_analysed = true;
+					abonentRecord.deepseek_analysis = structuredResult;
 					await this.abonentRecordRepository.save(abonentRecord);
-					this.logger.log(`✓ Запись ${recordId} помечена как проанализированная в БД`);
+					this.logger.log(`✓ Запись ${recordId} обновлена в БД с результатами анализа`);
 				} else {
 					this.logger.warn(`⚠️ Запись с beelineId ${recordId} не найдена в БД`);
 				}
@@ -120,9 +205,6 @@ export class ConversationAnalyzerService implements OnModuleInit {
 
 			this.logger.log(`Файл ${filename} успешно обработан. Результат сохранен в ${outputPath}`);
 			
-			// Опционально: перемещаем обработанный файл в архив или удаляем
-			// await fs.unlink(inputPath);
-
 		} catch (error) {
 			this.logger.error(`Ошибка при обработке файла ${filename}: ${error.message}`);
 			// Записываем информацию об ошибке в отдельный файл

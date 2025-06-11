@@ -53,26 +53,7 @@ export class AiDeepseekService implements OnModuleDestroy {
 		try {
 			this.logger.log(`Начинаем анализ разговора для клиента`);
 
-			// Получаем информацию о клиенте
-			// const clientInfo = await this.clientsService.getClientByPhone(clientPhone);
-
-			// let clientId: number | null = null;
-			// let clientName: string | null = null;
-			// let clientEmail: string | null = null;
-			
-			// if (clientInfo) {
-			// 	const client = clientInfo.orders[0] ?? clientInfo.nullOrders[0];
-			// 	if (client) {
-			// 		clientId = client.idAzatGc ?? null;
-			// 		clientName = client.userName ?? null;
-			// 		clientEmail = client.userEmail ?? null;
-			// 	} else {
-			// 		this.logger.log('❌ Не удалось найти клиента в базе данных');
-			// 		return null;
-			// 	}
-			// }
 			const systemPrompt = this.getPromptByDepartment(abonentDepartment);
-			//   const systemPrompt = getSalesPrompt();
 
 			const requestOptions: DeepseekRequestOptions = {
 				model: 'deepseek-reasoner',
@@ -92,20 +73,26 @@ export class AiDeepseekService implements OnModuleDestroy {
 			);
 
 			const analysisResult = response.data.choices[0].message.content;
+			this.logger.log('Анализ разговора: ', response.data.choices[0].message);
 
 			// Улучшенный парсинг JSON
 			let parsedResult;
 			try {
-				// Пытаемся найти JSON в ответе
-				const jsonMatch = analysisResult.match(/\{[\s\S]*\}/);
-				if (jsonMatch) {
-					parsedResult = JSON.parse(jsonMatch[0]);
+				// Извлекаем JSON из markdown блока
+				const jsonMatch = analysisResult.match(/```json\n([\s\S]*?)(?=\n```|$)/);
+				if (jsonMatch && jsonMatch[1]) {
+					const jsonStr = jsonMatch[1].trim();
+					this.logger.log('Извлеченный JSON:');
+					this.logger.log(jsonStr);
+					parsedResult = JSON.parse(jsonStr);
 				} else {
-					// Если JSON не найден, пытаемся парсить весь ответ
+					// Если не нашли markdown блок, пробуем парсить весь контент
 					parsedResult = JSON.parse(analysisResult);
 				}
 			} catch (parseError) {
-				this.logger.warn(`Не удалось распарсить JSON ответ: ${parseError.message}`);
+				this.logger.error(`Не удалось распарсить JSON ответ: ${parseError.message}`);
+				this.logger.error('Исходный ответ:');
+				this.logger.error(analysisResult);
 				// Сохраняем как строку если парсинг не удался
 				parsedResult = { raw_response: analysisResult };
 			}
@@ -123,7 +110,7 @@ export class AiDeepseekService implements OnModuleDestroy {
 
 			this.logger.log('✓ Анализ успешно сохранен в базе данных');
 
-			return analysisResult;
+			return parsedResult;
 
 		} catch (error) {
 			this.logger.error(`❌ Ошибка при анализе разговора: ${error.message}`);
@@ -148,7 +135,6 @@ export class AiDeepseekService implements OnModuleDestroy {
 				this.logger.error(`Связанный абонент не найден для записи ${recordId}`);
 				throw new Error(`Abonent not found for record: ${recordId}`);
 			}
-			
 			return await this.analyzeConversation(fileContent, clientPhone, record.abonent.department, record.id);
 		} catch (error) {
 			this.logger.error(`Ошибка при обработке файла ${filePath}: ${error.message}`);

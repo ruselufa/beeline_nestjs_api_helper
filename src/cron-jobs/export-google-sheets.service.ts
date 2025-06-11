@@ -261,20 +261,27 @@ export class ExportGoogleSheetsService implements OnApplicationBootstrap {
                 const jsonPath = path.join(jsonDir, analysisFile);
                 const jsonContent = await fs.readFile(jsonPath, 'utf-8');
                 try {
-                    // Удаляем лишние символы в начале и конце файла
-                    const cleanJson = jsonContent.replace(/^```json\n|\n```$/g, '');
+                    // Удаляем все маркеры кода и лишние пробелы
+                    const cleanJson = jsonContent
+                        .replace(/^```json\n|\n```$/g, '') // Удаляем маркеры кода
+                        .replace(/^\s+|\s+$/g, ''); // Удаляем лишние пробелы в начале и конце
+                    
+                    this.logger.log('Очищенное содержимое файла:');
+                    this.logger.log(cleanJson);
+                    
                     analysisData = JSON.parse(cleanJson);
                     this.logger.log(`Загружены данные анализа из файла ${analysisFile}`);
                 } catch (error) {
                     this.logger.error(`Ошибка парсинга JSON файла ${analysisFile}: ${error.message}`);
+                    return null;
                 }
             }
 
-            // Формируем строку для экспорта
+            // Формируем базовую строку для экспорта
             const exportRow: GoogleSheetsRow = {
                 record_id: record.id.toString(),
                 call_date: record.date.toISOString(),
-                department: 'Неизвестно',
+                department: abonent?.department || 'Неизвестно',
                 abonent_name: abonent ? `${abonent.firstName} ${abonent.lastName}`.trim() : 'Неизвестно',
                 abonent_phone: record.phone,
                 client_email: clientData.client_email,
@@ -286,18 +293,36 @@ export class ExportGoogleSheetsService implements OnApplicationBootstrap {
             };
 
             // Если есть данные анализа, добавляем их
-            if (analysisData && analysisData.table) {
-                // Преобразуем данные из JSON в формат GoogleSheetsRow
-                analysisData.table.blocks.forEach(block => {
-                    block.headers.forEach(header => {
-                        if (header.type === 'array' && Array.isArray(header.value)) {
-                            exportRow[header.id] = header.value.join(', ');
-                        } else {
-                            exportRow[header.id] = header.value;
-                        }
-                    });
+            if (analysisData && analysisData.table && Array.isArray(analysisData.table.blocks)) {
+                this.logger.log('Начинаем обработку блоков данных...');
+                
+                analysisData.table.blocks.forEach((block, blockIndex) => {
+                    this.logger.log(`Обработка блока ${blockIndex + 1}: ${block.blockName}`);
+                    
+                    if (Array.isArray(block.headers)) {
+                        block.headers.forEach(header => {
+                            try {
+                                const value = header.value;
+                                if (header.type === 'array' && Array.isArray(value)) {
+                                    exportRow[header.id] = value.join(', ');
+                                } else if (header.type === 'numeric') {
+                                    exportRow[header.id] = value.toString();
+                                } else {
+                                    exportRow[header.id] = value;
+                                }
+                                this.logger.log(`Добавлено поле ${header.id}: ${exportRow[header.id]}`);
+                            } catch (error) {
+                                this.logger.error(`Ошибка при обработке поля ${header.id}: ${error.message}`);
+                            }
+                        });
+                    }
                 });
+            } else {
+                this.logger.warn('Данные анализа отсутствуют или имеют неверный формат');
             }
+
+            this.logger.log('Подготовленные данные для экспорта:');
+            this.logger.log(JSON.stringify(exportRow, null, 2));
 
             return exportRow;
         } catch (error) {

@@ -10,7 +10,7 @@ export class TranscriptionService {
   private readonly apiUrl: string;
 
   constructor(private readonly httpService: HttpService) {
-    this.apiUrl = process.env.TRANSCRIPTION_API_URL || 'http://localhost:8000';
+    this.apiUrl = process.env.TRANSCRIPTION_API_URL || 'http://localhost:8001';
   }
 
   async transcribeAudio(audioPath: string): Promise<TranscriptionResponse> {

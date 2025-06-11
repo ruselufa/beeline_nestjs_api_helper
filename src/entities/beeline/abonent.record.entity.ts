@@ -1,4 +1,4 @@
- import { IsEnum, IsNotEmpty, IsNumber, IsString } from 'class-validator';
+import { IsEnum, IsNotEmpty, IsNumber, IsString } from 'class-validator';
 import { Column, Entity, ManyToOne, PrimaryGeneratedColumn } from 'typeorm';
 import { Abonent } from './abonent.entity';
 
@@ -79,6 +79,9 @@ export class AbonentRecord {
 
 	@Column({ type: 'boolean', default: false })
 	to_short: boolean;
+
+	@Column({ type: 'jsonb', nullable: true })
+	deepseek_analysis: any;
 
 	@ManyToOne(() => Abonent, (abonent) => abonent.abonentRecords)
 	abonent: Abonent;
