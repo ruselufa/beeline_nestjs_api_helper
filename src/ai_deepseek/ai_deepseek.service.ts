@@ -62,7 +62,7 @@ export class AiDeepseekService implements OnModuleDestroy {
 					{ role: 'user', content: text }
 				],
 				temperature: 0.7,
-				max_tokens: 4000
+				max_tokens: 8000
 			};
 
 			const response = await firstValueFrom(
@@ -85,16 +85,44 @@ export class AiDeepseekService implements OnModuleDestroy {
 					this.logger.log('Извлеченный JSON:');
 					this.logger.log(jsonStr);
 					parsedResult = JSON.parse(jsonStr);
+					// this.logger.log(parsedResult);
 				} else {
 					// Если не нашли markdown блок, пробуем парсить весь контент
 					parsedResult = JSON.parse(analysisResult);
 				}
+
+				// Проверяем структуру результата
+				if (!parsedResult.table || !parsedResult.table.blocks) {
+					throw new Error('Неверная структура ответа: отсутствует table.blocks');
+				}
+
+				// Проверяем наличие всех необходимых блоков
+				const requiredBlocks = ['Основная информация о звонке', 'Оценка этапов звонка', 'Общая оценка и рекомендации'];
+				const blocks = parsedResult.table.blocks.map(block => block.blockName);
+				const missingBlocks = requiredBlocks.filter(block => !blocks.includes(block));
+				
+				if (missingBlocks.length > 0) {
+					throw new Error(`Отсутствуют обязательные блоки: ${missingBlocks.join(', ')}`);
+				}
+
+				// Проверяем наличие всех необходимых полей в каждом блоке
+				parsedResult.table.blocks.forEach(block => {
+					if (!block.headers || !Array.isArray(block.headers)) {
+						throw new Error(`Неверная структура блока ${block.blockName}: отсутствует массив headers`);
+					}
+
+					block.headers.forEach(header => {
+						if (!header.id || !header.label || !header.type) {
+							throw new Error(`Неверная структура заголовка в блоке ${block.blockName}: отсутствуют обязательные поля`);
+						}
+					});
+				});
+
 			} catch (parseError) {
 				this.logger.error(`Не удалось распарсить JSON ответ: ${parseError.message}`);
 				this.logger.error('Исходный ответ:');
 				this.logger.error(analysisResult);
-				// Сохраняем как строку если парсинг не удался
-				parsedResult = { raw_response: analysisResult };
+				throw parseError;
 			}
 
 			// Сохраняем результат в БД

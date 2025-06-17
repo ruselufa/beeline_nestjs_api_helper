@@ -266,8 +266,8 @@ export class ExportGoogleSheetsService implements OnApplicationBootstrap {
                         .replace(/^```json\n|\n```$/g, '') // Удаляем маркеры кода
                         .replace(/^\s+|\s+$/g, ''); // Удаляем лишние пробелы в начале и конце
                     
-                    this.logger.log('Очищенное содержимое файла:');
-                    this.logger.log(cleanJson);
+                    // this.logger.log('Очищенное содержимое файла:');
+                    // this.logger.log(cleanJson);
                     
                     analysisData = JSON.parse(cleanJson);
                     this.logger.log(`Загружены данные анализа из файла ${analysisFile}`);
