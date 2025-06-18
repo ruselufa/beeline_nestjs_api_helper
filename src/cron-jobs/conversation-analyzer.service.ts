@@ -20,7 +20,7 @@ export class ConversationAnalyzerService implements OnModuleInit {
 
 	async onModuleInit() {
 		this.logger.log('Инициализация сервиса анализа разговоров...');
-		await this.processFiles();
+		// await this.processFiles();
 	}
 
 	private async processFiles() {

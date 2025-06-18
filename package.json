@@ -17,7 +17,13 @@
     "test:watch": "jest --watch",
     "test:cov": "jest --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
-    "test:e2e": "jest --config ./test/jest-e2e.json"
+    "test:e2e": "jest --config ./test/jest-e2e.json",
+
+    "abonents:update": "ts-node -r tsconfig-paths/register main-abonents-updater.ts",
+    "mp3:load": "ts-node src/cron-jobs/ts-files/main-records-loader.ts",
+    "transcribe": "ts-node src/cron-jobs/ts-files/main-transcription-test.ts",
+    "analyze": "ts-node src/cron-jobs/ts-files/main-conversation-analyzer.ts",
+    "export:gsheets": "ts-node src/cron-jobs/ts-files/main-export-google-sheets.ts"
   },
   "dependencies": {
     "@googleapis/sheets": "^10.0.1",
