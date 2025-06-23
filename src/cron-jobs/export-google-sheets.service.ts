@@ -32,27 +32,27 @@ export class ExportGoogleSheetsService implements OnApplicationBootstrap {
         this.logger.log('Инициализация сервиса экспорта в Google Sheets...');
         
         // Тестируем подключение к Google Sheets
-        // const isConnected = await this.googleSheetsService.testConnection();
-        // if (isConnected) {
-        //     this.logger.log('✓ Подключение к Google Sheets успешно установлено');
+        const isConnected = await this.googleSheetsService.testConnection();
+        if (isConnected) {
+            this.logger.log('✓ Подключение к Google Sheets успешно установлено');
             
-        //     // Инициализируем таблицу
-        //     try {
-        //         await this.googleSheetsService.initializeTable();
-        //         this.logger.log('✓ Таблица успешно инициализирована');
-        //     } catch (error) {
-        //         this.logger.error(`❌ Ошибка инициализации таблицы: ${error.message}`);
-        //         return;
-        //     }
-        // } else {
-        //     this.logger.error('❌ Не удалось подключиться к Google Sheets');
-        //     return;
-        // }
+            // Инициализируем таблицу
+            try {
+                await this.googleSheetsService.initializeTable();
+                this.logger.log('✓ Таблица успешно инициализирована');
+            } catch (error) {
+                this.logger.error(`❌ Ошибка инициализации таблицы: ${error.message}`);
+                return;
+            }
+        } else {
+            this.logger.error('❌ Не удалось подключиться к Google Sheets');
+            return;
+        }
 
-        // // Запускаем обработку через небольшую задержку
-        // setTimeout(() => {
-        //     this.processExportToGoogleSheets();
-        // }, 2000);
+        // Запускаем обработку через небольшую задержку
+        setTimeout(() => {
+            this.processExportToGoogleSheets();
+        }, 2000);
     }
 
     private async processExportToGoogleSheets() {
@@ -71,7 +71,7 @@ export class ExportGoogleSheetsService implements OnApplicationBootstrap {
         };
         
         this.logger.log('Условия поиска записей:');
-        this.logger.log(JSON.stringify(whereConditions, null, 2));
+        this.logger.log(JSON.stringify(whereConditions, null, 10));
 
         const totalRecords = await this.abonentRecordRepository.count({
             where: whereConditions
