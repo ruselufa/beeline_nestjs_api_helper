@@ -1,5 +1,4 @@
 import { Injectable, Logger, OnApplicationBootstrap } from '@nestjs/common';
-import { Cron } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { BeelineApiCallService } from '../beeline_api_call/beeline_api_call.service';
@@ -8,6 +7,8 @@ import { Abonent } from '../entities/beeline/abonent.entity';
 @Injectable()
 export class AbonentsUpdaterService implements OnApplicationBootstrap {
   private readonly logger = new Logger(AbonentsUpdaterService.name);
+  public isProcessing = false;
+  public lastStartTime: Date | null = null;
 
   constructor(
     private readonly beelineApiCallService: BeelineApiCallService,
@@ -17,13 +18,21 @@ export class AbonentsUpdaterService implements OnApplicationBootstrap {
 
   async onApplicationBootstrap() {
     this.logger.log('Приложение запущено, начинаю первичное обновление абонентов...');
-    // await this.updateAbonents();
+    await this.updateAbonents();
   }
 
-  @Cron('0 3 * * *') // каждый день в 3:00 ночи
   async updateAbonents() {
-    this.logger.log('Начинаю обновление абонентов...');
+    if (this.isProcessing) {
+      const runningTime = Date.now() - this.lastStartTime.getTime();
+      this.logger.warn(`Обновление абонентов уже выполняется ${Math.floor(runningTime / 1000)} секунд, пропускаем запуск`);
+      return;
+    }
+
+    this.isProcessing = true;
+    this.lastStartTime = new Date();
+    
     try {
+      this.logger.log('Начинаю обновление абонентов...');
       const abonents = await this.beelineApiCallService.getAllAbonents();
       this.logger.log(`Получено ${abonents.length} абонентов`);
       
@@ -65,6 +74,9 @@ export class AbonentsUpdaterService implements OnApplicationBootstrap {
       this.logger.log('Обновление абонентов успешно завершено');
     } catch (error) {
       this.logger.error('Ошибка при обновлении абонентов:', error);
+    } finally {
+      this.isProcessing = false;
+      this.lastStartTime = null;
     }
   }
 } 

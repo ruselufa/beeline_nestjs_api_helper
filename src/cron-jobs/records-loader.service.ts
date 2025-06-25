@@ -16,6 +16,9 @@ function chunks<T>(array: T[], size: number): T[][] {
 
 @Injectable()
 export class RecordsLoaderService implements OnApplicationBootstrap {
+  public isProcessing = false;
+  public lastStartTime: Date | null = null;
+
   constructor(
     private readonly beelineApiCallService: BeelineApiCallService,
     @InjectRepository(Abonent)
@@ -25,32 +28,37 @@ export class RecordsLoaderService implements OnApplicationBootstrap {
   ) {}
 
   async onApplicationBootstrap() {
-    // try {
-    //   // Получаем всех абонентов
-    //   const abonents = await this.abonentRepository.find();
-    //   console.log(`Найдено ${abonents.length} абонентов для загрузки записей`);
-
-    //   // Для каждого абонента загружаем записи с момента последней сохраненной
-    //   for (const [index, abonent] of abonents.entries()) {
-    //     try {
-    //       await this.loadAndSaveRecordsForUserFromLastRecord(abonent.userId);
-    //       console.log(`Обработан абонент ${index + 1} из ${abonents.length}`);
-    //     } catch (error) {
-    //       console.error(`Ошибка при загрузке записей для пользователя ${abonent.userId}:`, error);
-    //       // Продолжаем с следующим пользователем даже если произошла ошибка
-    //       continue;
-    //     }
-    //   }
-    //   console.log('Загрузка записей для всех пользователей завершена');
-    // } catch (error) {
-    //   console.error('Ошибка при загрузке записей для всех пользователей:', error);
-    // }
+    console.log('RecordsLoaderService инициализирован. Загрузка записей начнется через 1 минуту после старта приложения.');
+    
+    // Запускаем загрузку записей через 1 минуту после старта приложения
+    setTimeout(async () => {
+      console.log('Запуск первичной загрузки записей (через 1 минуту после старта)...');
+      await this.loadAllUsersRecords();
+    }, 60000); // 60000 мс = 1 минута
   }
 
   // Делаем cron на каждый день в 3:30 ночи
   @Cron('30 3 * * *')
   async loadAllUsersRecords() {
-    await this.loadAllAbonentsRecords();
+    if (this.isProcessing) {
+      const runningTime = Date.now() - this.lastStartTime.getTime();
+      console.warn(`Загрузка записей уже выполняется ${Math.floor(runningTime / 1000)} секунд, пропускаем запуск`);
+      return;
+    }
+
+    this.isProcessing = true;
+    this.lastStartTime = new Date();
+    
+    try {
+      console.log('Запуск cron-задачи: загрузка записей всех пользователей');
+      await this.loadAllAbonentsRecords();
+      console.log('Загрузка записей успешно завершена');
+    } catch (error) {
+      console.error('Ошибка выполнения загрузки записей:', error);
+    } finally {
+      this.isProcessing = false;
+      this.lastStartTime = null;
+    }
   }
 
   private async loadAllAbonentsRecords() {

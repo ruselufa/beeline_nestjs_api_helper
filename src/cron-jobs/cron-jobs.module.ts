@@ -14,6 +14,8 @@ import { GoogleSheetsModule } from '../google-sheets/google-sheets.module';
 import { AbonentRecord } from '../entities/beeline/abonent.record.entity';
 import { AnalyzedAi } from '../entities/beeline/analyzed_ai.entity';
 import { Abonent } from '../entities/beeline/abonent.entity';
+import { CronJobsController } from './cron-jobs.controller';
+import { CronJobsMonitorService } from './cron-jobs-monitor.service';
 
 @Module({
   imports: [
@@ -25,19 +27,22 @@ import { Abonent } from '../entities/beeline/abonent.entity';
     AiDeepseekModule,
     GoogleSheetsModule
   ],
+  controllers: [CronJobsController],
   providers: [
     AbonentsUpdaterService,
     RecordsLoaderService,
     TranscriptionTestService,
     ConversationAnalyzerService,
-    ExportGoogleSheetsService
+    ExportGoogleSheetsService,
+    CronJobsMonitorService
   ],
   exports: [
     AbonentsUpdaterService,
     RecordsLoaderService,
     TranscriptionTestService,
     ConversationAnalyzerService,
-    ExportGoogleSheetsService
+    ExportGoogleSheetsService,
+    CronJobsMonitorService
   ]
 })
 export class CronJobsModule {} 

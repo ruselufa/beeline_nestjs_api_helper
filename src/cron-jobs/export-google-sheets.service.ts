@@ -13,10 +13,13 @@ import { GoogleSheetsRow } from '../google-sheets/types/google-sheets.types';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { SHEETS_CONFIG_V2 } from '../ai_deepseek/config/config.sheets_v2';
+import { Cron } from '@nestjs/schedule';
 
 @Injectable()
 export class ExportGoogleSheetsService implements OnApplicationBootstrap {
     private readonly logger = new Logger(ExportGoogleSheetsService.name);
+    public isProcessing = false;
+    public lastStartTime: Date | null = null;
 
     constructor(
         @InjectRepository(AbonentRecord)
@@ -29,33 +32,42 @@ export class ExportGoogleSheetsService implements OnApplicationBootstrap {
     ) {}
 
     async onApplicationBootstrap() {
-        this.logger.log('Инициализация сервиса экспорта в Google Sheets...');
+        this.logger.log('ExportGoogleSheetsService инициализирован. Экспорт в Google Sheets будет выполняться по расписанию.');
         
-        // Тестируем подключение к Google Sheets
+        // Тестируем подключение к Google Sheets при старте
         const isConnected = await this.googleSheetsService.testConnection();
         if (isConnected) {
             this.logger.log('✓ Подключение к Google Sheets успешно установлено');
-            
-            // Инициализируем таблицу
-            try {
-                await this.googleSheetsService.initializeTable();
-                this.logger.log('✓ Таблица успешно инициализирована');
-            } catch (error) {
-                this.logger.error(`❌ Ошибка инициализации таблицы: ${error.message}`);
-                return;
-            }
         } else {
             this.logger.error('❌ Не удалось подключиться к Google Sheets');
+        }
+    }
+
+    // Запускаем экспорт каждый час
+    @Cron('0 * * * *')
+    async processExport() {
+        if (this.isProcessing) {
+            const runningTime = Date.now() - this.lastStartTime.getTime();
+            this.logger.warn(`Экспорт в Google Sheets уже выполняется ${Math.floor(runningTime / 1000)} секунд, пропускаем запуск`);
             return;
         }
 
-        // Запускаем обработку через небольшую задержку
-        setTimeout(() => {
-            this.processExportToGoogleSheets();
-        }, 2000);
+        this.isProcessing = true;
+        this.lastStartTime = new Date();
+        
+        try {
+            this.logger.log('Запуск cron-задачи: экспорт в Google Sheets');
+            await this.processExportToGoogleSheets();
+            this.logger.log('Экспорт в Google Sheets успешно завершен');
+        } catch (error) {
+            this.logger.error('Ошибка выполнения экспорта в Google Sheets:', error);
+        } finally {
+            this.isProcessing = false;
+            this.lastStartTime = null;
+        }
     }
 
-    private async processExportToGoogleSheets() {
+    async processExportToGoogleSheets() {
         let offset = 0;
         const batchSize = 10; // Уменьшил размер пакета для Google Sheets
         let processedTotal = 0;
@@ -251,30 +263,28 @@ export class ExportGoogleSheetsService implements OnApplicationBootstrap {
             // Получаем данные клиента
             const clientData = await this.getClientData(record.phone);
             
-            // Получаем данные из JSON файла
-            const jsonDir = path.join(process.cwd(), 'export', 'json');
-            const files = await fs.readdir(jsonDir);
-            const analysisFile = files.find(file => file.includes(`_client_${record.phone}_analysis.json`));
+            // Проверяем, что JSON файл анализа существует
+            const jsonPath = path.join(process.cwd(), 'export', 'json', `${record.beelineId}_client_${record.phone}_analysis.json`);
+            const jsonExists = await fs.access(jsonPath).then(() => true).catch(() => false);
+            
+            if (!jsonExists) {
+                this.logger.warn(`JSON файл анализа не найден для записи ${record.id}: ${jsonPath}`);
+                return null;
+            }
             
             let analysisData = null;
-            if (analysisFile) {
-                const jsonPath = path.join(jsonDir, analysisFile);
+            try {
                 const jsonContent = await fs.readFile(jsonPath, 'utf-8');
-                try {
-                    // Удаляем все маркеры кода и лишние пробелы
-                    const cleanJson = jsonContent
-                        .replace(/^```json\n|\n```$/g, '') // Удаляем маркеры кода
-                        .replace(/^\s+|\s+$/g, ''); // Удаляем лишние пробелы в начале и конце
-                    
-                    // this.logger.log('Очищенное содержимое файла:');
-                    // this.logger.log(cleanJson);
-                    
-                    analysisData = JSON.parse(cleanJson);
-                    this.logger.log(`Загружены данные анализа из файла ${analysisFile}`);
-                } catch (error) {
-                    this.logger.error(`Ошибка парсинга JSON файла ${analysisFile}: ${error.message}`);
-                    return null;
-                }
+                // Удаляем все маркеры кода и лишние пробелы
+                const cleanJson = jsonContent
+                    .replace(/^```json\n|\n```$/g, '') // Удаляем маркеры кода
+                    .replace(/^\s+|\s+$/g, ''); // Удаляем лишние пробелы в начале и конце
+                
+                analysisData = JSON.parse(cleanJson);
+                this.logger.log(`Загружены данные анализа из файла ${record.beelineId}_client_${record.phone}_analysis.json`);
+            } catch (error) {
+                this.logger.error(`Ошибка парсинга JSON файла для записи ${record.id}: ${error.message}`);
+                return null;
             }
 
             // Формируем базовую строку для экспорта
