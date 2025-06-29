@@ -5,6 +5,8 @@ import { AbonentRecord } from '../entities/beeline/abonent.record.entity';
 import { Abonent } from '../entities/beeline/abonent.entity';
 import { BeelineApiCallService } from '../beeline_api_call/beeline_api_call.service';
 import { Cron } from '@nestjs/schedule';
+import { Worker } from 'worker_threads';
+import * as path from 'path';
 
 function chunks<T>(array: T[], size: number): T[][] {
   const result: T[][] = [];
@@ -18,6 +20,7 @@ function chunks<T>(array: T[], size: number): T[][] {
 export class RecordsLoaderService implements OnApplicationBootstrap {
   public isProcessing = false;
   public lastStartTime: Date | null = null;
+  private worker: Worker | null = null;
 
   constructor(
     private readonly beelineApiCallService: BeelineApiCallService,
@@ -31,10 +34,13 @@ export class RecordsLoaderService implements OnApplicationBootstrap {
     console.log('RecordsLoaderService инициализирован. Загрузка записей начнется через 1 минуту после старта приложения.');
     
     // Запускаем загрузку записей через 1 минуту после старта приложения
-    setTimeout(async () => {
-      console.log('Запуск первичной загрузки записей (через 1 минуту после старта)...');
-      await this.loadAllUsersRecords();
-    }, 60000); // 60000 мс = 1 минута
+    // setTimeout(async () => {
+    //   console.log('Запуск первичной загрузки записей (через 1 минуту после старта)...');
+    //   // Устанавливаем флаги в начальное состояние ПЕРЕД вызовом
+    //   this.isProcessing = false;
+    //   this.lastStartTime = null;
+    //   await this.loadAllUsersRecords();
+    // }, 60000); // 60000 мс = 1 минута
   }
 
   // Делаем cron на каждый день в 3:30 ночи
@@ -51,6 +57,7 @@ export class RecordsLoaderService implements OnApplicationBootstrap {
     
     try {
       console.log('Запуск cron-задачи: загрузка записей всех пользователей');
+      // Временно используем обычную обработку вместо worker
       await this.loadAllAbonentsRecords();
       console.log('Загрузка записей успешно завершена');
     } catch (error) {
@@ -59,6 +66,52 @@ export class RecordsLoaderService implements OnApplicationBootstrap {
       this.isProcessing = false;
       this.lastStartTime = null;
     }
+  }
+
+  async loadRecordsWithWorker() {
+    return new Promise((resolve, reject) => {
+      // Определяем путь к worker файлу в зависимости от окружения
+      const isDev = process.env.NODE_ENV === 'development' || !process.env.NODE_ENV;
+      const workerPath = isDev 
+        ? path.join(process.cwd(), 'src', 'cron-jobs', 'records-worker.js')
+        : path.join(__dirname, 'records-worker.js');
+
+      // Создаем worker для загрузки записей
+      this.worker = new Worker(workerPath, {
+        workerData: {
+          // Передаем необходимые данные в worker
+        }
+      });
+
+      this.worker.on('message', (message) => {
+        console.log('Worker сообщение:', message);
+        if (message.type === 'progress') {
+          console.log(`Прогресс загрузки записей: ${message.data}`);
+        } else if (message.type === 'complete') {
+          console.log('Загрузка записей завершена в worker');
+          this.worker?.terminate();
+          this.worker = null;
+          resolve(message.data);
+        }
+      });
+
+      this.worker.on('error', (error) => {
+        console.error('Ошибка в worker:', error);
+        this.worker?.terminate();
+        this.worker = null;
+        reject(error);
+      });
+
+      this.worker.on('exit', (code) => {
+        if (code !== 0) {
+          console.error(`Worker завершился с кодом ${code}`);
+          reject(new Error(`Worker завершился с кодом ${code}`));
+        }
+      });
+
+      // Запускаем обработку в worker
+      this.worker.postMessage({ type: 'start' });
+    });
   }
 
   private async loadAllAbonentsRecords() {

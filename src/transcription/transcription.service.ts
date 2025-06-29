@@ -57,16 +57,36 @@ export class TranscriptionService {
   }
 
   async downloadResult(fileId: string): Promise<string> {
-    try {
-      const response = await firstValueFrom(
-        this.httpService.get(`${this.apiUrl}/download/${fileId}`, {
-          responseType: 'text',
-        }),
-      );
+    const maxRetries = 3;
+    const retryDelay = 2000; // 2 секунды
 
-      return response.data;
-    } catch (error) {
-      throw new Error(`Ошибка при скачивании результата: ${error.message}`);
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        console.log(`Попытка ${attempt}/${maxRetries} скачивания результата для ${fileId}`);
+        
+        const response = await firstValueFrom(
+          this.httpService.get(`${this.apiUrl}/download/${fileId}`, {
+            responseType: 'text',
+            timeout: 30000, // 30 секунд таймаут
+            headers: {
+              'Connection': 'keep-alive',
+              'Keep-Alive': 'timeout=30, max=1000'
+            }
+          }),
+        );
+
+        console.log(`Результат успешно скачан для ${fileId}`);
+        return response.data;
+      } catch (error) {
+        console.error(`Попытка ${attempt}/${maxRetries} неудачна для ${fileId}:`, error.message);
+        
+        if (attempt === maxRetries) {
+          throw new Error(`Ошибка при скачивании результата после ${maxRetries} попыток: ${error.message}`);
+        }
+        
+        // Ждем перед следующей попыткой
+        await new Promise(resolve => setTimeout(resolve, retryDelay * attempt));
+      }
     }
   }
 } 

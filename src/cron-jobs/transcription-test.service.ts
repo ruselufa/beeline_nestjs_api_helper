@@ -8,11 +8,13 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { MoreThan } from 'typeorm';
 import { Cron } from '@nestjs/schedule';
+import { Worker } from 'worker_threads';
 
 @Injectable()
 export class TranscriptionTestService implements OnApplicationBootstrap {
   public isProcessing = false;
   public lastStartTime: Date | null = null;
+  private worker: Worker | null = null;
 
   constructor(
     private readonly transcriptionService: TranscriptionService,
@@ -22,9 +24,16 @@ export class TranscriptionTestService implements OnApplicationBootstrap {
   ) {}
 
   async onApplicationBootstrap() {
-    // Убираем автоматический запуск при старте приложения
-    // Оставляем только cron-задачу для регулярного запуска
-    console.log('TranscriptionTestService инициализирован. Транскрибация будет выполняться по расписанию.');
+    console.log('TranscriptionTestService инициализирован. Первый запуск транскрибации через 2 минуты.');
+    
+    // Запускаем транскрибацию через 2 минуты после старта приложения
+    // setTimeout(async () => {
+    //   console.log('Запуск первичной транскрибации (через 2 минуты после старта)...');
+    //   // Устанавливаем флаги в начальное состояние ПЕРЕД вызовом
+    //   this.isProcessing = false;
+    //   this.lastStartTime = null;
+    //   await this.processTranscription();
+    // }, 120000); // 120000 мс = 2 минуты
   }
 
   // Запускаем транскрибацию каждые 30 минут
@@ -41,6 +50,7 @@ export class TranscriptionTestService implements OnApplicationBootstrap {
     
     try {
       console.log('Запуск cron-задачи: обработка транскрибации');
+      // Временно используем обычную обработку вместо worker
       await this.processFreshRecordsForTranscription();
       console.log('Транскрибация успешно завершена');
     } catch (error) {
@@ -49,6 +59,52 @@ export class TranscriptionTestService implements OnApplicationBootstrap {
       this.isProcessing = false;
       this.lastStartTime = null;
     }
+  }
+
+  async processTranscriptionWithWorker() {
+    return new Promise((resolve, reject) => {
+      // Определяем путь к worker файлу в зависимости от окружения
+      const isDev = process.env.NODE_ENV === 'development' || !process.env.NODE_ENV;
+      const workerPath = isDev 
+        ? path.join(process.cwd(), 'src', 'cron-jobs', 'transcription-worker.js')
+        : path.join(__dirname, 'transcription-worker.js');
+
+      // Создаем worker для транскрибации
+      this.worker = new Worker(workerPath, {
+        workerData: {
+          // Передаем необходимые данные в worker
+        }
+      });
+
+      this.worker.on('message', (message) => {
+        console.log('Worker сообщение:', message);
+        if (message.type === 'progress') {
+          console.log(`Прогресс транскрибации: ${message.data}`);
+        } else if (message.type === 'complete') {
+          console.log('Транскрибация завершена в worker');
+          this.worker?.terminate();
+          this.worker = null;
+          resolve(message.data);
+        }
+      });
+
+      this.worker.on('error', (error) => {
+        console.error('Ошибка в worker:', error);
+        this.worker?.terminate();
+        this.worker = null;
+        reject(error);
+      });
+
+      this.worker.on('exit', (code) => {
+        if (code !== 0) {
+          console.error(`Worker завершился с кодом ${code}`);
+          reject(new Error(`Worker завершился с кодом ${code}`));
+        }
+      });
+
+      // Запускаем обработку в worker
+      this.worker.postMessage({ type: 'start' });
+    });
   }
 
   async processFreshRecordsForTranscription() {
@@ -103,6 +159,22 @@ export class TranscriptionTestService implements OnApplicationBootstrap {
           const transcription = await this.transcriptionService.transcribeAudio(mp3Path);
           console.log(`Транскрибация запущена для записи ${record.beelineId}`);
           
+          // 2.5. Ждем завершения транскрибации
+          let status;
+          let attempts = 0;
+          const maxAttempts = 30; // максимум 5 минут ожидания
+          
+          do {
+            await new Promise(resolve => setTimeout(resolve, 10000)); // ждем 10 секунд
+            status = await this.transcriptionService.getStatus(transcription.file_id);
+            attempts++;
+            console.log(`Статус транскрибации ${record.beelineId}: ${status.status} (попытка ${attempts}/${maxAttempts})`);
+          } while (status.status === 'processing' && attempts < maxAttempts);
+          
+          if (status.status !== 'completed') {
+            throw new Error(`Транскрибация не завершена для записи ${record.beelineId}. Статус: ${status.status}`);
+          }
+          
           // 3. Получаем результат
           const txt = await this.transcriptionService.downloadResult(transcription.file_id);
           console.log(`Результат транскрибации получен для записи ${record.beelineId}`);
@@ -129,8 +201,20 @@ export class TranscriptionTestService implements OnApplicationBootstrap {
           processedTotal++;
           console.log(`Запись ${record.beelineId} успешно обработана и транскрибирована. (Прогресс: ${processedTotal}/${totalRecords}, осталось: ${totalRecords - processedTotal})`);
           
+          // Пауза между записями для снижения нагрузки на сервер
+          await new Promise(resolve => setTimeout(resolve, 2000));
+          
         } catch (err) {
           console.error(`Ошибка при обработке записи ${record.beelineId}:`, err);
+          
+          // Логируем детали ошибки
+          if (err.message.includes('ECONNRESET')) {
+            console.error(`Сетевая ошибка для записи ${record.beelineId} - соединение разорвано`);
+          } else if (err.message.includes('timeout')) {
+            console.error(`Таймаут для записи ${record.beelineId}`);
+          } else if (err.message.includes('download')) {
+            console.error(`Ошибка скачивания для записи ${record.beelineId}`);
+          }
           
           // При ошибке сбрасываем флаг скачивания, чтобы запись можно было обработать позже
           if (record.beeline_download) {
@@ -138,6 +222,9 @@ export class TranscriptionTestService implements OnApplicationBootstrap {
             await this.abonentRecordRepository.save(record);
             console.log(`Флаг beeline_download сброшен для записи ${record.beelineId} из-за ошибки`);
           }
+          
+          // Пауза после ошибки
+          await new Promise(resolve => setTimeout(resolve, 5000));
         }
       }
       offset += batchSize;

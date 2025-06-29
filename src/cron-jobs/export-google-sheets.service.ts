@@ -14,12 +14,14 @@ import * as fs from 'fs/promises';
 import * as path from 'path';
 import { SHEETS_CONFIG_V2 } from '../ai_deepseek/config/config.sheets_v2';
 import { Cron } from '@nestjs/schedule';
+import { Worker } from 'worker_threads';
 
 @Injectable()
 export class ExportGoogleSheetsService implements OnApplicationBootstrap {
     private readonly logger = new Logger(ExportGoogleSheetsService.name);
     public isProcessing = false;
     public lastStartTime: Date | null = null;
+    private worker: Worker | null = null;
 
     constructor(
         @InjectRepository(AbonentRecord)
@@ -57,6 +59,7 @@ export class ExportGoogleSheetsService implements OnApplicationBootstrap {
         
         try {
             this.logger.log('Запуск cron-задачи: экспорт в Google Sheets');
+            // Временно используем обычную обработку вместо worker
             await this.processExportToGoogleSheets();
             this.logger.log('Экспорт в Google Sheets успешно завершен');
         } catch (error) {
@@ -65,6 +68,52 @@ export class ExportGoogleSheetsService implements OnApplicationBootstrap {
             this.isProcessing = false;
             this.lastStartTime = null;
         }
+    }
+
+    async processExportWithWorker() {
+        return new Promise((resolve, reject) => {
+            // Определяем путь к worker файлу в зависимости от окружения
+            const isDev = process.env.NODE_ENV === 'development' || !process.env.NODE_ENV;
+            const workerPath = isDev 
+                ? path.join(process.cwd(), 'src', 'cron-jobs', 'export-worker.js')
+                : path.join(__dirname, 'export-worker.js');
+
+            // Создаем worker для экспорта в Google Sheets
+            this.worker = new Worker(workerPath, {
+                workerData: {
+                    // Передаем необходимые данные в worker
+                }
+            });
+
+            this.worker.on('message', (message) => {
+                this.logger.log('Worker сообщение:', message);
+                if (message.type === 'progress') {
+                    this.logger.log(`Прогресс экспорта в Google Sheets: ${message.data}`);
+                } else if (message.type === 'complete') {
+                    this.logger.log('Экспорт в Google Sheets завершен в worker');
+                    this.worker?.terminate();
+                    this.worker = null;
+                    resolve(message.data);
+                }
+            });
+
+            this.worker.on('error', (error) => {
+                this.logger.error('Ошибка в worker:', error);
+                this.worker?.terminate();
+                this.worker = null;
+                reject(error);
+            });
+
+            this.worker.on('exit', (code) => {
+                if (code !== 0) {
+                    this.logger.error(`Worker завершился с кодом ${code}`);
+                    reject(new Error(`Worker завершился с кодом ${code}`));
+                }
+            });
+
+            // Запускаем обработку в worker
+            this.worker.postMessage({ type: 'start' });
+        });
     }
 
     async processExportToGoogleSheets() {
@@ -289,7 +338,7 @@ export class ExportGoogleSheetsService implements OnApplicationBootstrap {
 
             // Формируем базовую строку для экспорта
             const exportRow: GoogleSheetsRow = {
-                record_id: record.id.toString(),
+                record_id: record.beelineId.toString(),
                 call_date: record.date.toISOString(),
                 department: abonent?.department || 'Неизвестно',
                 abonent_name: abonent ? `${abonent.firstName} ${abonent.lastName}`.trim() : 'Неизвестно',

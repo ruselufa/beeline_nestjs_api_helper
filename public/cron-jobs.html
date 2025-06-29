@@ -96,6 +96,11 @@
             color: #007bff;
             font-weight: 500;
         }
+        .job-thread {
+            font-size: 0.85em;
+            color: #28a745;
+            font-weight: 500;
+        }
         .job-last-run {
             font-size: 0.8em;
             color: #888;
@@ -305,6 +310,7 @@
                     <div class="job-schedule">📅 ${job.schedule}</div>
                     <div class="job-description">${job.description}</div>
                     <div class="job-protection">🛡️ ${job.protection}</div>
+                    <div class="job-thread">🧵 ${job.thread || 'Основной поток'}</div>
                     ${lastRunInfo}
                 `;
                 

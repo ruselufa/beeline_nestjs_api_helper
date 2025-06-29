@@ -8,6 +8,7 @@ import * as path from 'path';
 import { Cron } from '@nestjs/schedule';
 import { MoreThan } from 'typeorm';
 import { AnalyzedAi } from '../entities/beeline/analyzed_ai.entity';
+import { Worker } from 'worker_threads';
 
 @Injectable()
 export class ConversationAnalyzerService implements OnApplicationBootstrap {
@@ -15,6 +16,7 @@ export class ConversationAnalyzerService implements OnApplicationBootstrap {
 	private readonly exportDir = path.join(process.cwd(), 'export');
 	public isProcessing = false;
 	public lastStartTime: Date | null = null;
+	private worker: Worker | null = null;
 
 	constructor(
 		private aiDeepseekService: AiDeepseekService,
@@ -25,9 +27,16 @@ export class ConversationAnalyzerService implements OnApplicationBootstrap {
 	) { }
 
 	async onApplicationBootstrap() {
-		// Убираем автоматический запуск при старте приложения
-		// Оставляем только cron-задачу для регулярного запуска
-		console.log('ConversationAnalyzerService инициализирован. Анализ разговоров будет выполняться по расписанию.');
+		console.log('ConversationAnalyzerService инициализирован. Первый запуск анализа разговоров через 3 минуты.');
+		
+		// Запускаем анализ разговоров через 3 минуты после старта приложения
+		setTimeout(async () => {
+			console.log('Запуск первичного анализа разговоров (через 3 минуты после старта)...');
+			// Устанавливаем флаг в false ПЕРЕД вызовом processAnalysis
+			this.isProcessing = false;
+			this.lastStartTime = null;
+			await this.processAnalysis();
+		}, 1000); // 180000 мс = 3 минуты
 	}
 
 	// Запускаем анализ каждые 15 минут
@@ -44,6 +53,7 @@ export class ConversationAnalyzerService implements OnApplicationBootstrap {
 		
 		try {
 			console.log('Запуск cron-задачи: анализ разговоров');
+			// Временно используем обычную обработку вместо worker
 			await this.processFreshRecordsForAnalysis();
 			console.log('Анализ разговоров успешно завершен');
 		} catch (error) {
@@ -54,14 +64,53 @@ export class ConversationAnalyzerService implements OnApplicationBootstrap {
 		}
 	}
 
+	async processAnalysisWithWorker() {
+		return new Promise((resolve, reject) => {
+			// Определяем путь к worker файлу в зависимости от окружения
+			const isDev = process.env.NODE_ENV === 'development' || !process.env.NODE_ENV;
+			const workerPath = isDev 
+				? path.join(process.cwd(), 'src', 'cron-jobs', 'analysis-worker.js')
+				: path.join(__dirname, 'analysis-worker.js');
+
+			// Создаем worker для анализа разговоров
+			this.worker = new Worker(workerPath, {
+				workerData: {
+					// Передаем необходимые данные в worker
+				}
+			});
+
+			this.worker.on('message', (message) => {
+				console.log('Worker сообщение:', message);
+				if (message.type === 'progress') {
+					console.log(`Прогресс анализа разговоров: ${message.data}`);
+				} else if (message.type === 'complete') {
+					console.log('Анализ разговоров завершен в worker');
+					this.worker?.terminate();
+					this.worker = null;
+					resolve(message.data);
+				}
+			});
+
+			this.worker.on('error', (error) => {
+				console.error('Ошибка в worker:', error);
+				this.worker?.terminate();
+				this.worker = null;
+				reject(error);
+			});
+
+			this.worker.on('exit', (code) => {
+				if (code !== 0) {
+					console.error(`Worker завершился с кодом ${code}`);
+					reject(new Error(`Worker завершился с кодом ${code}`));
+				}
+			});
+
+			// Запускаем обработку в worker
+			this.worker.postMessage({ type: 'start' });
+		});
+	}
+
 	async processFreshRecordsForAnalysis() {
-		if (this.isProcessing) {
-			this.logger.warn('Обработка записей уже выполняется');
-			return;
-		}
-
-		this.isProcessing = true;
-
 		try {
 			// Ищем записи, которые готовы для анализа
 			const records = await this.abonentRecordRepository.find({
@@ -92,8 +141,6 @@ export class ConversationAnalyzerService implements OnApplicationBootstrap {
 		} catch (error) {
 			this.logger.error(`Ошибка при обработке записей: ${error.message}`);
 			throw error;
-		} finally {
-			this.isProcessing = false;
 		}
 	}
 

@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Logger } from '@nestjs/common';
+import { Controller, Post, Get, Logger, HttpException, HttpStatus } from '@nestjs/common';
 import { AbonentsUpdaterService } from './abonents-updater.service';
 import { RecordsLoaderService } from './records-loader.service';
 import { TranscriptionTestService } from './transcription-test.service';
@@ -41,59 +41,60 @@ export class CronJobsController {
   }
 
   @Post('analyze')
-  async analyze() {
-    this.logger.log('Ручной запуск анализа разговоров');
-    await this.conversationAnalyzerService.processRecordsForAnalysis();
-    return { message: 'Анализ разговоров запущен' };
+  async runAnalysis() {
+    try {
+      console.log('Ручной запуск анализа разговоров...');
+      await this.conversationAnalyzerService.processFreshRecordsForAnalysis();
+      return { message: 'Анализ разговоров успешно запущен' };
+    } catch (error) {
+      console.error('Ошибка при запуске анализа:', error);
+      throw new HttpException(
+        `Ошибка при запуске анализа: ${error.message}`,
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
   }
 
   @Post('export-sheets')
-  async exportSheets() {
-    this.logger.log('Ручной запуск экспорта в Google Sheets');
-    await this.exportGoogleSheetsService.processExportToGoogleSheets();
-    return { message: 'Экспорт в Google Sheets запущен' };
+  async runExportSheets() {
+    try {
+      console.log('Ручной запуск экспорта в Google Sheets...');
+      await this.exportGoogleSheetsService.processExportToGoogleSheets();
+      return { message: 'Экспорт в Google Sheets успешно запущен' };
+    } catch (error) {
+      console.error('Ошибка при запуске экспорта:', error);
+      throw new HttpException(
+        `Ошибка при запуске экспорта: ${error.message}`,
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
   }
 
   @Get('status')
   async getStatus() {
-    return {
-      message: 'Cron-jobs статус',
-      services: {
-        abonentsUpdater: 'Активен',
-        recordsLoader: 'Активен', 
-        transcriptionTest: 'Активен',
-        conversationAnalyzer: 'Активен',
-        exportGoogleSheets: 'Активен'
-      },
-      schedules: {
-        abonentsUpdater: 'При старте приложения',
-        recordsLoader: 'При старте + 1 минута + каждый день в 3:30',
-        transcriptionTest: 'Каждые 30 минут',
-        conversationAnalyzer: 'Каждые 15 минут',
-        exportGoogleSheets: 'Каждый час'
-      }
-    };
+    try {
+      const status = this.cronJobsMonitorService.getJobsStatus();
+      return status;
+    } catch (error) {
+      console.error('Ошибка при получении статуса:', error);
+      throw new HttpException(
+        `Ошибка при получении статуса: ${error.message}`,
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
   }
 
   @Get('monitor')
   async getMonitorStatus() {
-    this.logger.log('Запрос статуса мониторинга');
-    const status = await this.cronJobsMonitorService.getSystemStatus();
-    return {
-      message: 'Статус мониторинга системы',
-      timestamp: new Date().toISOString(),
-      ...status
-    };
-  }
-
-  @Get('monitor/detailed')
-  async getDetailedMonitorStatus() {
-    this.logger.log('Запрос детального статуса мониторинга');
-    const status = await this.cronJobsMonitorService.getDetailedStatus();
-    return {
-      message: 'Детальный статус мониторинга системы',
-      timestamp: new Date().toISOString(),
-      ...status
-    };
+    try {
+      const status = await this.cronJobsMonitorService.getDatabaseStats();
+      return status;
+    } catch (error) {
+      console.error('Ошибка при получении мониторинга:', error);
+      throw new HttpException(
+        `Ошибка при получении мониторинга: ${error.message}`,
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
   }
 } 
