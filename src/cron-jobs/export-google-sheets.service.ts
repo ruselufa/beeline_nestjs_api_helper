@@ -43,6 +43,12 @@ export class ExportGoogleSheetsService implements OnApplicationBootstrap {
         } else {
             this.logger.error('❌ Не удалось подключиться к Google Sheets');
         }
+
+        setTimeout(async () => {
+            this.isProcessing = false;
+            this.lastStartTime = null;
+            await this.processExport();
+        }, 10000);
     }
 
     // Запускаем экспорт каждый час
@@ -304,10 +310,16 @@ export class ExportGoogleSheetsService implements OnApplicationBootstrap {
         try {
             this.logger.log(`Подготовка записи ${record.id} для экспорта...`);
             
-            // Получаем данные абонента
+            // Получаем данные абонента по userId из записи
             const abonent = await this.abonentRepository.findOne({ 
-                where: { phone: record.phone }
+                where: { userId: record.abonent?.userId || record.abonent?.id?.toString() }
             });
+            
+            if (!abonent) {
+                this.logger.warn(`Абонент не найден для записи ${record.id} с phone: ${record.phone}`);
+            } else {
+                this.logger.log(`Найден абонент: ${abonent.firstName} ${abonent.lastName} (${abonent.department})`);
+            }
             
             // Получаем данные клиента
             const clientData = await this.getClientData(record.phone);
@@ -336,12 +348,12 @@ export class ExportGoogleSheetsService implements OnApplicationBootstrap {
                 return null;
             }
 
-            // Формируем базовую строку для экспорта
+            // Формируем базовую строку для экспорта с правильными данными
             const exportRow: GoogleSheetsRow = {
-                record_id: record.beelineId.toString(),
+                record_id: record.beelineId.toString(), // Реальный recordId записи
                 call_date: record.date.toISOString(),
                 department: abonent?.department || 'Неизвестно',
-                abonent_name: abonent ? `${abonent.firstName} ${abonent.lastName}`.trim() : 'Неизвестно',
+                abonent_name: abonent ? `${abonent.firstName || ''} ${abonent.lastName || ''}`.trim() || 'Неизвестно' : 'Неизвестно',
                 abonent_phone: record.phone,
                 client_email: clientData.client_email,
                 client_name: clientData.client_name,
@@ -351,9 +363,15 @@ export class ExportGoogleSheetsService implements OnApplicationBootstrap {
                 duration_seconds: Math.floor(record.duration / 1000),
             };
 
+            this.logger.log(`Базовые данные записи ${record.id}:`);
+            this.logger.log(`- Record ID: ${exportRow.record_id}`);
+            this.logger.log(`- Department: ${exportRow.department}`);
+            this.logger.log(`- Abonent Name: ${exportRow.abonent_name}`);
+            this.logger.log(`- Duration: ${exportRow.duration_seconds} сек`);
+
             // Если есть данные анализа, добавляем их
             if (analysisData && analysisData.table && Array.isArray(analysisData.table.blocks)) {
-                this.logger.log('Начинаем обработку блоков данных...');
+                this.logger.log('Начинаем обработку блоков данных анализа...');
                 
                 analysisData.table.blocks.forEach((block, blockIndex) => {
                     this.logger.log(`Обработка блока ${blockIndex + 1}: ${block.blockName}`);
@@ -380,9 +398,7 @@ export class ExportGoogleSheetsService implements OnApplicationBootstrap {
                 this.logger.warn('Данные анализа отсутствуют или имеют неверный формат');
             }
 
-            this.logger.log('Подготовленные данные для экспорта:');
-            this.logger.log(JSON.stringify(exportRow, null, 2));
-
+            this.logger.log(`Запись ${record.id} успешно подготовлена для экспорта`);
             return exportRow;
         } catch (error) {
             this.logger.error(`Ошибка подготовки записи ${record.id}: ${error.message}`);

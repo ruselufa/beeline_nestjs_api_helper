@@ -30,17 +30,17 @@ export class ConversationAnalyzerService implements OnApplicationBootstrap {
 		console.log('ConversationAnalyzerService инициализирован. Первый запуск анализа разговоров через 3 минуты.');
 		
 		// Запускаем анализ разговоров через 3 минуты после старта приложения
-		setTimeout(async () => {
-			console.log('Запуск первичного анализа разговоров (через 3 минуты после старта)...');
-			// Устанавливаем флаг в false ПЕРЕД вызовом processAnalysis
-			this.isProcessing = false;
-			this.lastStartTime = null;
-			await this.processAnalysis();
-		}, 1000); // 180000 мс = 3 минуты
+		// setTimeout(async () => {
+		// 	console.log('Запуск первичного анализа разговоров (через 3 минуты после старта)...');
+		// 	// Устанавливаем флаг в false ПЕРЕД вызовом processAnalysis
+		// 	this.isProcessing = false;
+		// 	this.lastStartTime = null;
+		// 	await this.processAnalysis();
+		// }, 1000); // 180000 мс = 3 минуты
 	}
 
 	// Запускаем анализ каждые 15 минут
-	@Cron('*/15 * * * *')
+	// @Cron('*/15 * * * *')
 	async processAnalysis() {
 		if (this.isProcessing) {
 			const runningTime = Date.now() - this.lastStartTime.getTime();

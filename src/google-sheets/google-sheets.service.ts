@@ -176,13 +176,16 @@ export class GoogleSheetsService {
 
 	async writeRow(data: GoogleSheetsRow): Promise<WriteResult> {
 		try {
-			const spreadsheet = await this.spreadsheet;
+			// Убеждаемся, что таблица инициализирована
+			if (!this.spreadsheet) {
+				await this.initializeTable();
+			}
 			
 			// Получаем первый лист
-			let sheet = spreadsheet.sheetsByIndex[0];
+			let sheet = this.spreadsheet.sheetsByIndex[0];
 			if (!sheet) {
 				const headers = await this.configService.getHeaders();
-				sheet = await spreadsheet.addSheet({ 
+				sheet = await this.spreadsheet.addSheet({ 
 					title: 'Call Analysis',
 					headerValues: headers
 				});
@@ -211,12 +214,15 @@ export class GoogleSheetsService {
 
 	async writeMultipleRows(dataArray: GoogleSheetsRow[]): Promise<WriteResult> {
 		try {
-			const spreadsheet = await this.spreadsheet;
+			// Убеждаемся, что таблица инициализирована
+			if (!this.spreadsheet) {
+				await this.initializeTable();
+			}
 			
-			let sheet = spreadsheet.sheetsByIndex[0];
+			let sheet = this.spreadsheet.sheetsByIndex[0];
 			if (!sheet) {
 				const headers = await this.configService.getHeaders();
-				sheet = await spreadsheet.addSheet({ 
+				sheet = await this.spreadsheet.addSheet({ 
 					title: 'Call Analysis',
 					headerValues: headers
 				});
