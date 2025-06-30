@@ -98,8 +98,8 @@
         }
         .job-thread {
             font-size: 0.85em;
-            color: #28a745;
-            font-weight: 500;
+            color: #666;
+            margin-top: 5px;
         }
         .job-last-run {
             font-size: 0.8em;
@@ -202,6 +202,59 @@
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
+        .job-queue {
+            margin-top: 15px;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border-left: 4px solid #007bff;
+        }
+        .queue-header {
+            font-weight: 600;
+            color: #007bff;
+            margin-bottom: 8px;
+        }
+        .queue-stats {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.85em;
+            color: #666;
+            margin-bottom: 8px;
+        }
+        .queue-utilization {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 0.85em;
+        }
+        .utilization-bar {
+            flex: 1;
+            height: 8px;
+            background: #e9ecef;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        .utilization-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #28a745, #ffc107, #dc3545);
+            transition: width 0.3s ease;
+        }
+        .queue-status {
+            margin-top: 5px;
+            font-size: 0.8em;
+            color: #007bff;
+            font-weight: 500;
+        }
+        .adaptive-mode {
+            font-size: 0.85em;
+            color: #28a745;
+            font-weight: 500;
+        }
+        .consecutive-errors {
+            font-size: 0.85em;
+            color: #dc3545;
+            font-weight: 500;
+        }
     </style>
 </head>
 <body>
@@ -303,6 +356,26 @@
                         ${job.lastRun.isCurrentlyRunning ? `<br>Выполняется: ${job.lastRun.runningTime} сек` : ''}
                     </div>
                 ` : '';
+
+                const queueInfo = job.queue ? `
+                    <div class="job-queue">
+                        <div class="queue-header">📋 Очередь анализа:</div>
+                        <div class="queue-stats">
+                            <span>В очереди: ${job.queue.queueLength}</span>
+                            <span>Активных: ${job.queue.activeRequests}/${job.queue.maxConcurrentRequests}</span>
+                            <span>За минуту: ${job.queue.currentRequestsInLastMinute}/${job.queue.requestsPerMinute}</span>
+                        </div>
+                        <div class="queue-utilization">
+                            <div class="utilization-bar">
+                                <div class="utilization-fill" style="width: ${job.queue.utilization}%"></div>
+                            </div>
+                            <span>Загрузка: ${job.queue.utilization}%</span>
+                        </div>
+                        ${job.queue.adaptiveMode ? '<div class="adaptive-mode">🔄 Адаптивный режим активен</div>' : ''}
+                        ${job.queue.consecutiveErrors > 0 ? `<div class="consecutive-errors">⚠️ Ошибок подряд: ${job.queue.consecutiveErrors}</div>` : ''}
+                        ${job.queue.isQueueProcessing ? '<div class="queue-status">🔄 Обработка очереди</div>' : ''}
+                    </div>
+                ` : '';
                 
                 card.innerHTML = `
                     <div class="job-name">${job.name}</div>
@@ -312,6 +385,7 @@
                     <div class="job-protection">🛡️ ${job.protection}</div>
                     <div class="job-thread">🧵 ${job.thread || 'Основной поток'}</div>
                     ${lastRunInfo}
+                    ${queueInfo}
                 `;
                 
                 jobsGrid.appendChild(card);

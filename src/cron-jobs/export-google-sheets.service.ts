@@ -183,10 +183,10 @@ export class ExportGoogleSheetsService implements OnApplicationBootstrap {
                 
                 if (result.success) {
                     // Помечаем записи как экспортированные
-                    // for (const record of records.slice(0, rowsToExport.length)) {
-                    //     record.google_sheets_export = true;
-                    //     await this.abonentRecordRepository.save(record);
-                    // }
+                    for (const record of records.slice(0, rowsToExport.length)) {
+                        record.google_sheets_export = true;
+                        await this.abonentRecordRepository.save(record);
+                    }
                     
                     processedTotal += rowsToExport.length;
                     this.logger.log(`✓ Экспортировано ${rowsToExport.length} записей в Google Sheets`);

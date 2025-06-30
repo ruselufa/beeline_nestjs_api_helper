@@ -87,6 +87,7 @@ export class CronJobsMonitorService {
           protection: 'isProcessing защита',
           thread: 'Основной поток',
           lastRun: this.getLastRunInfo(this.conversationAnalyzerService),
+          queue: this.getQueueInfo(),
         },
         exportGoogleSheets: {
           name: 'Экспорт в Google Sheets',
@@ -171,5 +172,26 @@ export class CronJobsMonitorService {
     });
 
     return recommendations;
+  }
+
+  private getQueueInfo(): any {
+    try {
+      const queueStatus = this.conversationAnalyzerService.getQueueStatus();
+      return {
+        queueLength: queueStatus.queueLength,
+        activeRequests: queueStatus.activeRequests,
+        maxConcurrentRequests: queueStatus.maxConcurrentRequests,
+        requestsPerMinute: queueStatus.requestsPerMinute,
+        currentRequestsInLastMinute: queueStatus.currentRequestsInLastMinute,
+        isQueueProcessing: queueStatus.isQueueProcessing,
+        utilization: queueStatus.maxConcurrentRequests > 0 ? 
+          Math.round((queueStatus.activeRequests / queueStatus.maxConcurrentRequests) * 100) : 0,
+        rateLimitUtilization: queueStatus.requestsPerMinute > 0 ? 
+          Math.round((queueStatus.currentRequestsInLastMinute / queueStatus.requestsPerMinute) * 100) : 0
+      };
+    } catch (error) {
+      this.logger.error('Ошибка при получении информации о очереди:', error);
+      return { error: 'Не удалось получить информацию о очереди' };
+    }
   }
 } 

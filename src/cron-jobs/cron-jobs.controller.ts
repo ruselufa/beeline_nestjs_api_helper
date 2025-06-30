@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Logger, HttpException, HttpStatus } from '@nestjs/common';
+import { Controller, Post, Get, Logger, HttpException, HttpStatus, Body } from '@nestjs/common';
 import { AbonentsUpdaterService } from './abonents-updater.service';
 import { RecordsLoaderService } from './records-loader.service';
 import { TranscriptionTestService } from './transcription-test.service';
@@ -44,8 +44,8 @@ export class CronJobsController {
   async runAnalysis() {
     try {
       console.log('Ручной запуск анализа разговоров...');
-      await this.conversationAnalyzerService.processFreshRecordsForAnalysis();
-      return { message: 'Анализ разговоров успешно запущен' };
+      await this.conversationAnalyzerService.processFreshRecordsForAnalysisWithQueue();
+      return { message: 'Анализ разговоров успешно запущен через очередь' };
     } catch (error) {
       console.error('Ошибка при запуске анализа:', error);
       throw new HttpException(
@@ -93,6 +93,65 @@ export class CronJobsController {
       console.error('Ошибка при получении мониторинга:', error);
       throw new HttpException(
         `Ошибка при получении мониторинга: ${error.message}`,
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
+
+  @Get('analyze/queue-status')
+  async getQueueStatus() {
+    try {
+      const status = this.conversationAnalyzerService.getQueueStatus();
+      return status;
+    } catch (error) {
+      console.error('Ошибка при получении статуса очереди:', error);
+      throw new HttpException(
+        `Ошибка при получении статуса очереди: ${error.message}`,
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
+
+  @Post('analyze/clear-queue')
+  async clearQueue() {
+    try {
+      const result = this.conversationAnalyzerService.clearQueue();
+      return { message: 'Очередь очищена', ...result };
+    } catch (error) {
+      console.error('Ошибка при очистке очереди:', error);
+      throw new HttpException(
+        `Ошибка при очистке очереди: ${error.message}`,
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
+
+  @Post('analyze/update-settings')
+  async updateQueueSettings(@Body() settings: { maxConcurrent?: number; requestsPerMinute?: number }) {
+    try {
+      const result = this.conversationAnalyzerService.updateQueueSettings(
+        settings.maxConcurrent,
+        settings.requestsPerMinute
+      );
+      return { message: 'Настройки очереди обновлены', ...result };
+    } catch (error) {
+      console.error('Ошибка при обновлении настроек очереди:', error);
+      throw new HttpException(
+        `Ошибка при обновлении настроек очереди: ${error.message}`,
+        HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
+  }
+
+  @Post('analyze/disable-adaptive-mode')
+  async disableAdaptiveMode() {
+    try {
+      const result = this.conversationAnalyzerService.disableAdaptiveMode();
+      return { message: 'Адаптивный режим отключен', ...result };
+    } catch (error) {
+      console.error('Ошибка при отключении адаптивного режима:', error);
+      throw new HttpException(
+        `Ошибка при отключении адаптивного режима: ${error.message}`,
         HttpStatus.INTERNAL_SERVER_ERROR
       );
     }
