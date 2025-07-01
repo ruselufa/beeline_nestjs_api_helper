@@ -40,7 +40,7 @@ export class RecordsLoaderService implements OnApplicationBootstrap {
     //   this.isProcessing = false;
     //   this.lastStartTime = null;
     //   await this.loadAllUsersRecords();
-    // }, 60000); // 60000 мс = 1 минута
+    // }, 5000); // 60000 мс = 1 минута
   }
 
   // Делаем cron на каждый день в 3:30 ночи

@@ -28,15 +28,15 @@ export interface GoogleSheetsRow {
 	record_id?: string;
 	call_date?: string;
 	department?: string;
-	abonent_name?: string;
-	abonent_phone?: string;
+	manager_name?: string;
+	manager_phone?: string;
 	client_email?: string;
 	client_name?: string;
 	client_gc_id_link?: string;
 	orders?: string[];
 	null_orders?: string[];
 	duration_seconds?: number;
-	manager_name?: string;
+	client_phone?: string;
 	client_occupation?: string;
 	call_purpose?: string;
 	training_name?: string;
@@ -77,6 +77,8 @@ export interface GoogleSheetsRow {
 	recommendation_greeting?: string;
 	recommendation_points?: string;
 	recommendation_closing?: string;
+	abonent_name?: string;
+	abonent_phone?: string;
 
 	// Структура для данных из JSON файла
 	table?: TableData;

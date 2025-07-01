@@ -33,11 +33,11 @@ export class TranscriptionTestService implements OnApplicationBootstrap {
     //   this.isProcessing = false;
     //   this.lastStartTime = null;
     //   await this.processTranscription();
-    // }, 120000); // 120000 мс = 2 минуты
+    // }, 20000); // 120000 мс = 2 минуты
   }
 
   // Запускаем транскрибацию каждые 30 минут
-  @Cron('*/30 * * * *')
+  // @Cron('*/30 * * * *')
   async processTranscription() {
     if (this.isProcessing) {
       const runningTime = Date.now() - this.lastStartTime.getTime();

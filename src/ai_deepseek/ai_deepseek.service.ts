@@ -65,6 +65,14 @@ export class AiDeepseekService implements OnModuleDestroy {
 				max_tokens: 8000
 			};
 
+			// Логируем размер запроса для отладки
+			const requestSize = JSON.stringify(requestOptions).length;
+			this.logger.log(`Размер запроса: ${requestSize} байт`);
+			
+			if (requestSize > 50000) {
+				this.logger.warn(`Большой размер запроса: ${requestSize} байт. Возможны проблемы с API`);
+			}
+
 			const response = await firstValueFrom(
 				this.httpService.post<DeepseekResponse>(
 					this.apiUrl,

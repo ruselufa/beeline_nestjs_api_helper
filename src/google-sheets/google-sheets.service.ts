@@ -50,8 +50,6 @@ export class GoogleSheetsService {
 			rowData.record_id = data.record_id || '';
 			rowData.call_date = data.call_date || '';
 			rowData.department = data.department || '';
-			rowData.abonent_name = data.abonent_name || '';
-			rowData.abonent_phone = data.abonent_phone || '';
 			rowData.client_email = data.client_email || '';
 			rowData.client_name = data.client_name || '';
 			rowData.client_gc_id_link = data.client_gc_id_link || '';
@@ -60,7 +58,9 @@ export class GoogleSheetsService {
 			rowData.duration_seconds = data.duration_seconds || '';
 
 			// Основная информация о звонке
+			rowData.client_phone = data.client_phone || '';
 			rowData.manager_name = data.manager_name || '';
+			rowData.manager_phone = data.manager_phone || '';
 			rowData.client_occupation = data.client_occupation || '';
 			rowData.call_purpose = data.call_purpose || '';
 			rowData.training_name = data.training_name || '';
@@ -113,6 +113,9 @@ export class GoogleSheetsService {
 			rowData.recommendation_greeting = data.recommendation_greeting || '';
 			rowData.recommendation_points = Array.isArray(data.recommendation_points) ? data.recommendation_points.join(', ') : '';
 			rowData.recommendation_closing = data.recommendation_closing || '';
+
+			rowData.abonent_name = data.abonent_name || '';
+			rowData.abonent_phone = data.abonent_phone || '';
 		}
 
 		this.logger.log('Подготовленные данные для записи в таблицу:');

@@ -57,11 +57,11 @@ export class ConversationAnalyzerService implements OnApplicationBootstrap {
 		// 	this.isProcessing = false;
 		// 	this.lastStartTime = null;
 		// 	await this.processAnalysis();
-		// }, 1000); // 180000 мс = 3 минуты
+		// }, 5000); // 180000 мс = 3 минуты
 	}
 
 	// Запускаем анализ каждые 15 минут
-	@Cron('*/15 * * * *')
+	// @Cron('*/15 * * * *')
 	async processAnalysis() {
 		if (this.isProcessing) {
 			const runningTime = Date.now() - this.lastStartTime.getTime();
@@ -374,10 +374,10 @@ export class ConversationAnalyzerService implements OnApplicationBootstrap {
 				// Обрабатываем ошибки API
 				this.handleApiError(error);
 				
-				// Если это 429 ошибка, добавляем задержку
-				if (error.status === 429) {
-					const delay = Math.min(30000, 5000 * this.consecutiveErrors); // От 5 до 30 секунд
-					this.logger.warn(`Получена 429 ошибка, ожидание ${delay}мс перед повтором`);
+				// Если это 429 или 500 ошибка, добавляем задержку
+				if (error.status === 429 || error.status === 500) {
+					const delay = Math.min(60000, 10000 * this.consecutiveErrors); // От 10 до 60 секунд для 500 ошибок
+					this.logger.warn(`Получена ${error.status} ошибка, ожидание ${delay}мс перед повтором`);
 					await new Promise(resolve => setTimeout(resolve, delay));
 					
 					// Повторяем запрос один раз
@@ -430,9 +430,10 @@ export class ConversationAnalyzerService implements OnApplicationBootstrap {
 	private handleApiError(error: any) {
 		this.consecutiveErrors++;
 		this.logger.warn(`API ошибка (${this.consecutiveErrors}/${this.maxConsecutiveErrors}): ${error.message}`);
+		this.logger.warn(`Статус ошибки: ${error.status}, Тип: ${error.type || 'неизвестно'}`);
 		
-		// Если получили 429 или много ошибок подряд, включаем адаптивный режим
-		if (error.status === 429 || this.consecutiveErrors >= this.maxConsecutiveErrors) {
+		// Если получили 429, 500 или много ошибок подряд, включаем адаптивный режим
+		if (error.status === 429 || error.status === 500 || this.consecutiveErrors >= this.maxConsecutiveErrors) {
 			this.enableAdaptiveMode();
 		}
 	}

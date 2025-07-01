@@ -48,11 +48,11 @@ export class ExportGoogleSheetsService implements OnApplicationBootstrap {
             this.isProcessing = false;
             this.lastStartTime = null;
             await this.processExport();
-        }, 10000);
+        }, 5000);
     }
 
     // Запускаем экспорт каждый час
-    @Cron('0 * * * *')
+    // @Cron('0 * * * *')
     async processExport() {
         if (this.isProcessing) {
             const runningTime = Date.now() - this.lastStartTime.getTime();
@@ -151,7 +151,8 @@ export class ExportGoogleSheetsService implements OnApplicationBootstrap {
                 where: whereConditions,
                 order: { date: 'DESC' },
                 skip: offset,
-                take: batchSize
+                take: batchSize,
+                relations: ['abonent']
             });
             
             if (!records.length) {
@@ -350,23 +351,26 @@ export class ExportGoogleSheetsService implements OnApplicationBootstrap {
 
             // Формируем базовую строку для экспорта с правильными данными
             const exportRow: GoogleSheetsRow = {
-                record_id: record.beelineId.toString(), // Реальный recordId записи
+                record_id: record.beelineId.toString(),
                 call_date: record.date.toISOString(),
                 department: abonent?.department || 'Неизвестно',
-                abonent_name: abonent ? `${abonent.firstName || ''} ${abonent.lastName || ''}`.trim() || 'Неизвестно' : 'Неизвестно',
-                abonent_phone: record.phone,
+                client_phone: record.phone,
+                manager_name: abonent ? `${abonent.firstName || ''} ${abonent.lastName || ''}`.trim() || 'Неизвестно' : 'Неизвестно',
+                manager_phone: abonent?.phone || '',
                 client_email: clientData.client_email,
                 client_name: clientData.client_name,
                 client_gc_id_link: clientData.client_gc_id_link,
                 orders: JSON.parse(clientData.orders || '[]'),
                 null_orders: JSON.parse(clientData.null_orders || '[]'),
                 duration_seconds: Math.floor(record.duration / 1000),
+                abonent_name: abonent ? `${abonent.firstName || ''} ${abonent.lastName || ''}`.trim() || 'Неизвестно' : 'Неизвестно',
+                abonent_phone: abonent?.phone || '',
             };
 
             this.logger.log(`Базовые данные записи ${record.id}:`);
             this.logger.log(`- Record ID: ${exportRow.record_id}`);
             this.logger.log(`- Department: ${exportRow.department}`);
-            this.logger.log(`- Abonent Name: ${exportRow.abonent_name}`);
+            this.logger.log(`- Manager Name: ${exportRow.manager_name}`);
             this.logger.log(`- Duration: ${exportRow.duration_seconds} сек`);
 
             // Если есть данные анализа, добавляем их
