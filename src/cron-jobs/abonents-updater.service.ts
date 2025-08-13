@@ -6,6 +6,7 @@ import { Abonent } from '../entities/beeline/abonent.entity';
 import { Worker } from 'worker_threads';
 import * as path from 'path';
 import { WorkerUtils } from './worker-utils';
+import { Cron } from '@nestjs/schedule';
 
 @Injectable()
 export class AbonentsUpdaterService implements OnApplicationBootstrap {
@@ -25,6 +26,7 @@ export class AbonentsUpdaterService implements OnApplicationBootstrap {
     // await this.updateAbonents();
   }
 
+  // @Cron('*/15 * * * *')
   async updateAbonents() {
     if (this.isProcessing) {
       const runningTime = Date.now() - this.lastStartTime.getTime();

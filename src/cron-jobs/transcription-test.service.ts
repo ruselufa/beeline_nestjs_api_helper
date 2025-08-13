@@ -23,21 +23,53 @@ export class TranscriptionTestService implements OnApplicationBootstrap {
     private readonly abonentRecordRepository: Repository<AbonentRecord>,
   ) {}
 
+  // ===== ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ ДЛЯ ВРЕМЕНИ =====
+  private formatTime(ms: number): string {
+    const seconds = Math.floor(ms / 1000);
+    const minutes = Math.floor(seconds / 60);
+    const hours = Math.floor(minutes / 60);
+    if (hours > 0) {
+      return `${hours}ч ${minutes % 60}м ${seconds % 60}с`;
+    } else if (minutes > 0) {
+      return `${minutes}м ${seconds % 60}с`;
+    } else {
+      return `${seconds}с`;
+    }
+  }
+
+  private calculateETA(processedCount: number, totalCount: number, processingTimes: number[]): string {
+    if (processedCount === 0 || processingTimes.length === 0) {
+      return 'неизвестно';
+    }
+    const averageTime = processingTimes.reduce((sum, time) => sum + time, 0) / processingTimes.length;
+    const remainingRecords = totalCount - processedCount;
+    const estimatedTimeMs = averageTime * remainingRecords;
+    return this.formatTime(estimatedTimeMs);
+  }
+
+  private getAverageProcessingTime(processingTimes: number[]): string {
+    if (processingTimes.length === 0) {
+      return 'неизвестно';
+    }
+    const averageTime = processingTimes.reduce((sum, time) => sum + time, 0) / processingTimes.length;
+    return this.formatTime(averageTime);
+  }
+
   async onApplicationBootstrap() {
     console.log('TranscriptionTestService инициализирован. Первый запуск транскрибации через 2 минуты.');
     
     // Запускаем транскрибацию через 2 минуты после старта приложения
-    // setTimeout(async () => {
-    //   console.log('Запуск первичной транскрибации (через 2 минуты после старта)...');
-    //   // Устанавливаем флаги в начальное состояние ПЕРЕД вызовом
-    //   this.isProcessing = false;
-    //   this.lastStartTime = null;
-    //   await this.processTranscription();
-    // }, 20000); // 120000 мс = 2 минуты
+    setTimeout(async () => {
+      console.log('Запуск первичной транскрибации (через 2 минуты после старта)...');
+      // Устанавливаем флаги в начальное состояние ПЕРЕД вызовом
+      this.isProcessing = false;
+      this.lastStartTime = null;
+      await this.processTranscription();
+    }, 1000); // 120000 мс = 2 минуты
   }
 
   // Запускаем транскрибацию каждые 30 минут
-  // @Cron('*/30 * * * *')
+  // @Cron('*/1 * * * *')
   async processTranscription() {
     if (this.isProcessing) {
       const runningTime = Date.now() - this.lastStartTime.getTime();
@@ -111,6 +143,7 @@ export class TranscriptionTestService implements OnApplicationBootstrap {
     let offset = 0;
     const batchSize = 20;
     let processedTotal = 0;
+    const processingTimes: number[] = [];
 
     // Получаем общее количество записей для обработки (только длинные)
     const totalRecords = await this.abonentRecordRepository.count({
@@ -121,6 +154,7 @@ export class TranscriptionTestService implements OnApplicationBootstrap {
         duration: MoreThan(240000)
       }
     });
+    const startTime = Date.now();
     console.log(`Всего найдено записей длительностью > 4 минут для обработки: ${totalRecords}`);
 
     while (true) {
@@ -145,6 +179,7 @@ export class TranscriptionTestService implements OnApplicationBootstrap {
           continue;
         }
         
+        const recordStartTime = Date.now();
         try {
           console.log(`Начинаем обработку записи ${record.beelineId}...`);
           
@@ -199,13 +234,26 @@ export class TranscriptionTestService implements OnApplicationBootstrap {
           }
           
           processedTotal++;
-          console.log(`Запись ${record.beelineId} успешно обработана и транскрибирована. (Прогресс: ${processedTotal}/${totalRecords}, осталось: ${totalRecords - processedTotal})`);
-          
+          // === Время обработки ===
+          const recordProcessingTime = Date.now() - recordStartTime;
+          processingTimes.push(recordProcessingTime);
+          // === Статистика ===
+          const averageTime = this.getAverageProcessingTime(processingTimes);
+          const eta = this.calculateETA(processedTotal, totalRecords, processingTimes);
+          const elapsedTime = this.formatTime(Date.now() - startTime);
+          console.log(`✅ Запись ${record.beelineId} успешно обработана за ${this.formatTime(recordProcessingTime)}`);
+          console.log(`📊 Прогресс: ${processedTotal}/${totalRecords} (${Math.round(processedTotal/totalRecords*100)}%)`);
+          console.log(`⏱️  Среднее время обработки: ${averageTime}`);
+          console.log(`⏳ Прошло времени: ${elapsedTime}`);
+          console.log(`⏳ Примерное время завершения: ${eta}`);
+          console.log(`📈 Осталось записей: ${totalRecords - processedTotal}`);
+          console.log('─'.repeat(80));
           // Пауза между записями для снижения нагрузки на сервер
           await new Promise(resolve => setTimeout(resolve, 2000));
           
         } catch (err) {
-          console.error(`Ошибка при обработке записи ${record.beelineId}:`, err);
+          const recordProcessingTime = Date.now() - recordStartTime;
+          console.error(`❌ Ошибка при обработке записи ${record.beelineId} (затрачено времени: ${this.formatTime(recordProcessingTime)}):`, err);
           
           // Логируем детали ошибки
           if (err.message.includes('ECONNRESET')) {
@@ -229,6 +277,15 @@ export class TranscriptionTestService implements OnApplicationBootstrap {
       }
       offset += batchSize;
     }
-    console.log(`Обработка завершена. Всего обработано записей: ${processedTotal} из ${totalRecords}`);
+    // Финальная статистика
+    const totalTime = Date.now() - startTime;
+    const finalAverageTime = this.getAverageProcessingTime(processingTimes);
+    console.log('🎉 Обработка завершена!');
+    console.log(`📊 Итоговая статистика:`);
+    console.log(`   • Обработано записей: ${processedTotal}`);
+    console.log(`   • Общее время: ${this.formatTime(totalTime)}`);
+    console.log(`   • Среднее время на запись: ${finalAverageTime}`);
+    console.log(`   • Успешных записей: ${processingTimes.length}`);
+    console.log(`   • Ошибок: ${processedTotal - processingTimes.length}`);
   }
 } 

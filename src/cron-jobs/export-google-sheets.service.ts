@@ -44,15 +44,15 @@ export class ExportGoogleSheetsService implements OnApplicationBootstrap {
             this.logger.error('❌ Не удалось подключиться к Google Sheets');
         }
 
-        setTimeout(async () => {
-            this.isProcessing = false;
-            this.lastStartTime = null;
-            await this.processExport();
-        }, 5000);
+        // setTimeout(async () => {
+        //     this.isProcessing = false;
+        //     this.lastStartTime = null;
+        //     await this.processExport();
+        // }, 1000);
     }
 
-    // Запускаем экспорт каждый час
-    // @Cron('0 * * * *')
+    // Запускаем экспорт каждый 15 min
+    // @Cron('*/1 * * * *')
     async processExport() {
         if (this.isProcessing) {
             const runningTime = Date.now() - this.lastStartTime.getTime();
@@ -367,33 +367,59 @@ export class ExportGoogleSheetsService implements OnApplicationBootstrap {
                 abonent_phone: abonent?.phone || '',
             };
 
-            this.logger.log(`Базовые данные записи ${record.id}:`);
-            this.logger.log(`- Record ID: ${exportRow.record_id}`);
-            this.logger.log(`- Department: ${exportRow.department}`);
-            this.logger.log(`- Manager Name: ${exportRow.manager_name}`);
-            this.logger.log(`- Duration: ${exportRow.duration_seconds} сек`);
+            // this.logger.log(`Базовые данные записи ${record.id}:`);
+            // this.logger.log(`- Record ID: ${exportRow.record_id}`);
+            // this.logger.log(`- Department: ${exportRow.department}`);
+            // this.logger.log(`- Manager Name: ${exportRow.manager_name}`);
+            // this.logger.log(`- Duration: ${exportRow.duration_seconds} сек`);
 
             // Если есть данные анализа, добавляем их
             if (analysisData && analysisData.table && Array.isArray(analysisData.table.blocks)) {
-                this.logger.log('Начинаем обработку блоков данных анализа...');
+                // this.logger.log('Начинаем обработку блоков данных анализа...');
+                // this.logger.log(`Найдено блоков: ${analysisData.table.blocks.length}`);
                 
                 analysisData.table.blocks.forEach((block, blockIndex) => {
-                    this.logger.log(`Обработка блока ${blockIndex + 1}: ${block.blockName}`);
+                    // this.logger.log(`Обработка блока ${blockIndex + 1}: ${block.blockName}`);
+                    // this.logger.log(`Количество заголовков в блоке: ${block.headers?.length || 0}`);
                     
                     if (Array.isArray(block.headers)) {
                         block.headers.forEach(header => {
                             try {
                                 const value = header.value;
-                                if (header.type === 'array' && Array.isArray(value)) {
-                                    exportRow[header.id] = value.join(', ');
+                                
+                                // Улучшенная обработка массивов
+                                if (header.type === 'array') {
+                                    if (Array.isArray(value)) {
+                                        // Если это массив, объединяем элементы через запятую и пробел
+                                        exportRow[header.id] = value.join(', ');
+                                        // this.logger.log(`Добавлено поле ${header.id} (массив): ${exportRow[header.id]}`);
+                                    } else if (typeof value === 'string') {
+                                        // Если это строка, оставляем как есть
+                                        exportRow[header.id] = value;
+                                        // this.logger.log(`Добавлено поле ${header.id} (строка): ${exportRow[header.id]}`);
+                                    } else {
+                                        // Если значение null/undefined, устанавливаем пустую строку
+                                        exportRow[header.id] = '';
+                                        // this.logger.log(`Добавлено поле ${header.id} (пустое): пустая строка`);
+                                    }
                                 } else if (header.type === 'numeric') {
-                                    exportRow[header.id] = value.toString();
+                                    // Обработка числовых значений
+                                    if (value === null || value === undefined || value === '') {
+                                        exportRow[header.id] = '0';
+                                    } else {
+                                        const num = Number(value);
+                                        exportRow[header.id] = isNaN(num) ? '0' : num.toString();
+                                    }
+                                    // this.logger.log(`Добавлено поле ${header.id} (число): ${exportRow[header.id]}`);
                                 } else {
-                                    exportRow[header.id] = value;
+                                    // Обработка текстовых значений
+                                    exportRow[header.id] = value || '';
+                                    // this.logger.log(`Добавлено поле ${header.id} (текст): ${exportRow[header.id]}`);
                                 }
-                                this.logger.log(`Добавлено поле ${header.id}: ${exportRow[header.id]}`);
                             } catch (error) {
                                 this.logger.error(`Ошибка при обработке поля ${header.id}: ${error.message}`);
+                                // Устанавливаем пустое значение при ошибке
+                                exportRow[header.id] = '';
                             }
                         });
                     }
@@ -401,6 +427,14 @@ export class ExportGoogleSheetsService implements OnApplicationBootstrap {
             } else {
                 this.logger.warn('Данные анализа отсутствуют или имеют неверный формат');
             }
+
+            // Логируем примеры полей с массивами для отладки
+            const arrayFields = ['greeting_good', 'greeting_improve', 'needs_good', 'needs_improve', 'what_was_good', 'what_to_improve', 'recommendations'];
+            arrayFields.forEach(field => {
+                if (exportRow[field] !== undefined) {
+                    // this.logger.log(`Поле ${field}: "${exportRow[field]}" (тип: ${typeof exportRow[field]})`);
+                }
+            });
 
             this.logger.log(`Запись ${record.id} успешно подготовлена для экспорта`);
             return exportRow;

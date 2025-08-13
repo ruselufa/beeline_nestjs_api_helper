@@ -40,13 +40,61 @@ export class AiDeepseekService implements OnModuleDestroy {
 
 		this.httpService.axiosRef.defaults.headers.common['Authorization'] = `Bearer ${this.apiKey}`;
 		this.httpService.axiosRef.defaults.headers.common['Content-Type'] = 'application/json';
-		this.httpService.axiosRef.defaults.timeout = 600000;
+		this.httpService.axiosRef.defaults.timeout = 300000; // Уменьшаем до 5 минут
+		this.httpService.axiosRef.defaults.maxRedirects = 5;
+		this.httpService.axiosRef.defaults.validateStatus = (status) => status < 500; // Принимаем только статусы < 500
 	}
 
 	private getPromptByDepartment(department: string): string {
 		return department.toLowerCase().includes('Отдел Качества') || department.toLowerCase().includes('Отдел Продукта')
 			? qualityPromptV2
 			: salesPromptV2;
+	}
+
+	// Создаем специальный класс ошибки для неполных JSON ответов
+	private isIncompleteJsonError(error: any, jsonString: string): boolean {
+		// Проверяем типичные признаки неполного JSON
+		const errorMessage = error.message.toLowerCase();
+		const jsonLower = jsonString.toLowerCase();
+		
+		// Все возможные ошибки парсинга JSON
+		const jsonParseErrors = [
+			'unexpected end of json input',
+			'unexpected token',
+			'unterminated string',
+			'expected \',\' or \'}\' after property value',
+			'expected \',\' or \']\' after array element',
+			'unexpected number',
+			'unexpected string',
+			'unexpected boolean',
+			'unexpected null',
+			'unexpected end of data',
+			'bad escaped character',
+			'bad control character',
+			'bad unicode escape',
+			'duplicate key',
+			'number too big',
+			'number too small'
+		];
+		
+		// Проверяем на ошибки парсинга
+		const hasJsonParseError = jsonParseErrors.some(err => errorMessage.includes(err));
+		
+		// Проверяем структурную целостность JSON
+		const hasStructuralIssues = (
+			(jsonLower.includes('"table"') && !jsonLower.includes('"scoring"')) ||
+			(jsonLower.includes('"blocks"') && !jsonLower.includes(']')) ||
+			(jsonLower.includes('"headers"') && !jsonLower.includes(']'))
+		);
+		
+		// Проверяем на незакрытые кавычки или скобки
+		const hasUnclosedElements = (
+			(jsonString.split('"').length % 2 !== 1) || // Нечетное количество кавычек
+			(jsonString.split('{').length !== jsonString.split('}').length) || // Неравное количество скобок
+			(jsonString.split('[').length !== jsonString.split(']').length) // Неравное количество квадратных скобок
+		);
+		
+		return hasJsonParseError || hasStructuralIssues || hasUnclosedElements;
 	}
 
 	async analyzeConversation(text: string, clientPhone: string, abonentDepartment: string, recordId?: number): Promise<any> {
@@ -62,7 +110,7 @@ export class AiDeepseekService implements OnModuleDestroy {
 					{ role: 'user', content: text }
 				],
 				temperature: 0.7,
-				max_tokens: 8000
+				max_tokens: 16000
 			};
 
 			// Логируем размер запроса для отладки
@@ -81,22 +129,24 @@ export class AiDeepseekService implements OnModuleDestroy {
 			);
 
 			const analysisResult = response.data.choices[0].message.content;
-			this.logger.log('Анализ разговора: ', response.data.choices[0].message);
+			// this.logger.log('Анализ разговора: ', response.data.choices[0].message);
 
-			// Улучшенный парсинг JSON
+			// Улучшенный парсинг JSON с обработкой неполных ответов
 			let parsedResult;
+			let jsonString = '';
+			
 			try {
 				// Извлекаем JSON из markdown блока
 				const jsonMatch = analysisResult.match(/```json\n([\s\S]*?)(?=\n```|$)/);
 				if (jsonMatch && jsonMatch[1]) {
-					const jsonStr = jsonMatch[1].trim();
-					this.logger.log('Извлеченный JSON:');
-					this.logger.log(jsonStr);
-					parsedResult = JSON.parse(jsonStr);
-					// this.logger.log(parsedResult);
+					jsonString = jsonMatch[1].trim();
+					// this.logger.log('Извлеченный JSON:');
+					// this.logger.log(jsonString);
+					parsedResult = JSON.parse(jsonString);
 				} else {
 					// Если не нашли markdown блок, пробуем парсить весь контент
-					parsedResult = JSON.parse(analysisResult);
+					jsonString = analysisResult.trim();
+					parsedResult = JSON.parse(jsonString);
 				}
 
 				// Проверяем структуру результата
@@ -127,13 +177,41 @@ export class AiDeepseekService implements OnModuleDestroy {
 				});
 
 			} catch (parseError) {
-				this.logger.error(`Не удалось распарсить JSON ответ: ${parseError.message}`);
-				this.logger.error('Исходный ответ:');
-				this.logger.error(analysisResult);
+				// Проверяем, является ли это ошибкой неполного JSON
+				if (this.isIncompleteJsonError(parseError, jsonString)) {
+					this.logger.error(`❌ Получен неполный/некорректный JSON ответ от DeepSeek для записи ${recordId}`);
+					this.logger.error(`🔍 Тип ошибки: ${parseError.message}`);
+					this.logger.error(`📏 Размер ответа: ${analysisResult.length} символов`);
+					this.logger.error(`📏 Размер JSON: ${jsonString.length} символов`);
+					this.logger.error(`📍 Позиция ошибки: ${parseError.message.match(/position (\d+)/)?.[1] || 'неизвестно'}`);
+					
+					// Показываем контекст вокруг ошибки
+					const position = parseInt(parseError.message.match(/position (\d+)/)?.[1] || '0');
+					if (position > 0) {
+						const start = Math.max(0, position - 100);
+						const end = Math.min(jsonString.length, position + 100);
+						this.logger.error(`🔍 Контекст ошибки (позиция ${position}):`);
+						this.logger.error(`   ...${jsonString.slice(start, position)}[ОШИБКА]${jsonString.slice(position, end)}...`);
+					}
+					
+					// Создаем специальную ошибку для неполного JSON
+					const incompleteError = new Error(`Неполный/некорректный JSON ответ от DeepSeek: ${parseError.message}`);
+					incompleteError.name = 'IncompleteJsonError';
+					(incompleteError as any).isIncompleteJson = true;
+					(incompleteError as any).originalError = parseError;
+					(incompleteError as any).jsonString = jsonString;
+					(incompleteError as any).errorPosition = position;
+					
+					throw incompleteError;
+				}
+				
+				this.logger.error(`❌ Не удалось распарсить JSON ответ: ${parseError.message}`);
+				// this.logger.error('Исходный ответ:');
+				// this.logger.error(analysisResult);
 				throw parseError;
 			}
 
-			// Сохраняем результат в БД
+			// Сохраняем результат в БД только если парсинг прошел успешно
 			const createAnalyzedAiDto: CreateAnalyzedAiDto = {
 				conversationId: `conv_${recordId || Date.now().toString()}`,
 				department: abonentDepartment,
@@ -144,12 +222,38 @@ export class AiDeepseekService implements OnModuleDestroy {
 
 			await this.analyzedAiRepository.save(createAnalyzedAiDto);
 
-			this.logger.log('✓ Анализ успешно сохранен в базе данных');
+			this.logger.log('✅ Анализ успешно сохранен в базе данных');
 
 			return parsedResult;
 
 		} catch (error) {
 			this.logger.error(`❌ Ошибка при анализе разговора: ${error.message}`);
+			
+			// Логируем дополнительную информацию для неполных JSON
+			if ((error as any).isIncompleteJson) {
+				this.logger.error(`🔍 Детали неполного/некорректного JSON:`);
+				this.logger.error(`   - Тип ошибки: ${error.name}`);
+				this.logger.error(`   - Оригинальная ошибка: ${(error as any).originalError?.message}`);
+				this.logger.error(`   - Размер JSON: ${(error as any).jsonString?.length || 'неизвестно'} символов`);
+				if ((error as any).errorPosition) {
+					this.logger.error(`   - Позиция ошибки: ${(error as any).errorPosition}`);
+				}
+				
+				// Анализируем структуру JSON для диагностики
+				const jsonStr = (error as any).jsonString || '';
+				if (jsonStr) {
+					const openBraces = (jsonStr.match(/\{/g) || []).length;
+					const closeBraces = (jsonStr.match(/\}/g) || []).length;
+					const openBrackets = (jsonStr.match(/\[/g) || []).length;
+					const closeBrackets = (jsonStr.match(/\]/g) || []).length;
+					const quotes = (jsonStr.match(/"/g) || []).length;
+					
+					this.logger.error(`   - Диагностика структуры:`);
+					this.logger.error(`     Скобки: {${openBraces}} }${closeBraces} [${openBrackets}] ]${closeBrackets}`);
+					this.logger.error(`     Кавычки: ${quotes} (должно быть четное число)`);
+				}
+			}
+			
 			throw error;
 		}
 	}

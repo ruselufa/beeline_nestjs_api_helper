@@ -22,10 +22,10 @@ export class GoogleSheetsService {
 
 		// Если данные пришли в формате блоков (как в JSON файле)
 		if (data.table && Array.isArray(data.table.blocks)) {
-			this.logger.log('Обработка данных в формате блоков...');
+			// this.logger.log('Обработка данных в формате блоков...');
 			
 			data.table.blocks.forEach((block, blockIndex) => {
-				this.logger.log(`Обработка блока ${blockIndex + 1}: ${block.blockName}`);
+				// this.logger.log(`Обработка блока ${blockIndex + 1}: ${block.blockName}`);
 				
 				if (Array.isArray(block.headers)) {
 					block.headers.forEach(header => {
@@ -36,7 +36,7 @@ export class GoogleSheetsService {
 							} else {
 								rowData[header.id] = value;
 							}
-							this.logger.log(`Добавлено поле ${header.id}: ${rowData[header.id]}`);
+							// this.logger.log(`Добавлено поле ${header.id}: ${rowData[header.id]}`);
 						} catch (error) {
 							this.logger.error(`Ошибка при обработке поля ${header.id}: ${error.message}`);
 						}
@@ -44,7 +44,7 @@ export class GoogleSheetsService {
 				}
 			});
 		} else {
-			this.logger.log('Обработка данных в плоском формате...');
+			// this.logger.log('Обработка данных в плоском формате...');
 			
 			// Базовые поля
 			rowData.record_id = data.record_id || '';
@@ -69,57 +69,57 @@ export class GoogleSheetsService {
 
 			// Оценка этапов звонка
 			rowData.greeting_score = data.greeting_score || '';
-			rowData.greeting_good = Array.isArray(data.greeting_good) ? data.greeting_good.join(', ') : '';
-			rowData.greeting_improve = Array.isArray(data.greeting_improve) ? data.greeting_improve.join(', ') : '';
+			rowData.greeting_good = Array.isArray(data.greeting_good) ? data.greeting_good.join(', ') : (data.greeting_good || '');
+			rowData.greeting_improve = Array.isArray(data.greeting_improve) ? data.greeting_improve.join(', ') : (data.greeting_improve || '');
 			rowData.greeting_recommendation = data.greeting_recommendation || '';
 
 			rowData.programming_score = data.programming_score || '';
-			rowData.programming_good = Array.isArray(data.programming_good) ? data.programming_good.join(', ') : '';
-			rowData.programming_improve = Array.isArray(data.programming_improve) ? data.programming_improve.join(', ') : '';
+			rowData.programming_good = Array.isArray(data.programming_good) ? data.programming_good.join(', ') : (data.programming_good || '');
+			rowData.programming_improve = Array.isArray(data.programming_improve) ? data.programming_improve.join(', ') : (data.programming_improve || '');
 			rowData.programming_recommendation = data.programming_recommendation || '';
 
 			rowData.needs_score = data.needs_score || '';
-			rowData.needs_good = Array.isArray(data.needs_good) ? data.needs_good.join(', ') : '';
-			rowData.needs_improve = Array.isArray(data.needs_improve) ? data.needs_improve.join(', ') : '';
+			rowData.needs_good = Array.isArray(data.needs_good) ? data.needs_good.join(', ') : (data.needs_good || '');
+			rowData.needs_improve = Array.isArray(data.needs_improve) ? data.needs_improve.join(', ') : (data.needs_improve || '');
 			rowData.needs_recommendation = data.needs_recommendation || '';
 
 			rowData.summary_score = data.summary_score || '';
-			rowData.summary_good = Array.isArray(data.summary_good) ? data.summary_good.join(', ') : '';
-			rowData.summary_improve = Array.isArray(data.summary_improve) ? data.summary_improve.join(', ') : '';
+			rowData.summary_good = Array.isArray(data.summary_good) ? data.summary_good.join(', ') : (data.summary_good || '');
+			rowData.summary_improve = Array.isArray(data.summary_improve) ? data.summary_improve.join(', ') : (data.summary_improve || '');
 			rowData.summary_recommendation = data.summary_recommendation || '';
 
 			rowData.presentation_score = data.presentation_score || '';
-			rowData.presentation_good = Array.isArray(data.presentation_good) ? data.presentation_good.join(', ') : '';
-			rowData.presentation_improve = Array.isArray(data.presentation_improve) ? data.presentation_improve.join(', ') : '';
+			rowData.presentation_good = Array.isArray(data.presentation_good) ? data.presentation_good.join(', ') : (data.presentation_good || '');
+			rowData.presentation_improve = Array.isArray(data.presentation_improve) ? data.presentation_improve.join(', ') : (data.presentation_improve || '');
 			rowData.presentation_recommendation = data.presentation_recommendation || '';
 
 			rowData.objections_score = data.objections_score || '';
-			rowData.objections_good = Array.isArray(data.objections_good) ? data.objections_good.join(', ') : '';
-			rowData.objections_improve = Array.isArray(data.objections_improve) ? data.objections_improve.join(', ') : '';
+			rowData.objections_good = Array.isArray(data.objections_good) ? data.objections_good.join(', ') : (data.objections_good || '');
+			rowData.objections_improve = Array.isArray(data.objections_improve) ? data.objections_improve.join(', ') : (data.objections_improve || '');
 			rowData.objections_recommendation = data.objections_recommendation || '';
 
 			rowData.closure_score = data.closure_score || '';
-			rowData.closure_good = Array.isArray(data.closure_good) ? data.closure_good.join(', ') : '';
-			rowData.closure_improve = Array.isArray(data.closure_improve) ? data.closure_improve.join(', ') : '';
+			rowData.closure_good = Array.isArray(data.closure_good) ? data.closure_good.join(', ') : (data.closure_good || '');
+			rowData.closure_improve = Array.isArray(data.closure_improve) ? data.closure_improve.join(', ') : (data.closure_improve || '');
 			rowData.closure_recommendation = data.closure_recommendation || '';
 
 			// Общая оценка
 			rowData.total_score = data.total_score || '';
-			rowData.overall_good = Array.isArray(data.overall_good) ? data.overall_good.join(', ') : '';
-			rowData.overall_improve = Array.isArray(data.overall_improve) ? data.overall_improve.join(', ') : '';
-			rowData.overall_recommendations = Array.isArray(data.overall_recommendations) ? data.overall_recommendations.join(', ') : '';
+			rowData.overall_good = Array.isArray(data.overall_good) ? data.overall_good.join(', ') : (data.overall_good || '');
+			rowData.overall_improve = Array.isArray(data.overall_improve) ? data.overall_improve.join(', ') : (data.overall_improve || '');
+			rowData.overall_recommendations = Array.isArray(data.overall_recommendations) ? data.overall_recommendations.join(', ') : (data.overall_recommendations || '');
 
 			// Шаблон рекомендаций
 			rowData.recommendation_greeting = data.recommendation_greeting || '';
-			rowData.recommendation_points = Array.isArray(data.recommendation_points) ? data.recommendation_points.join(', ') : '';
+			rowData.recommendation_points = Array.isArray(data.recommendation_points) ? data.recommendation_points.join(', ') : (data.recommendation_points || '');
 			rowData.recommendation_closing = data.recommendation_closing || '';
 
 			rowData.abonent_name = data.abonent_name || '';
 			rowData.abonent_phone = data.abonent_phone || '';
 		}
 
-		this.logger.log('Подготовленные данные для записи в таблицу:');
-		this.logger.log(JSON.stringify(rowData, null, 2));
+		// this.logger.log('Подготовленные данные для записи в таблицу:');
+		// this.logger.log(JSON.stringify(rowData, null, 2));
 
 		return rowData;
 	}
@@ -130,7 +130,7 @@ export class GoogleSheetsService {
 			const headers = await this.configService.getHeaders();
 			const credentials = await this.configService.getCredentials();
 			
-			this.logger.log(`Получены заголовки: ${headers.join(', ')}`);
+			// this.logger.log(`Получены заголовки: ${headers.join(', ')}`);
 			
 			// Настраиваем аутентификацию
 			const auth = new GoogleAuth({
@@ -158,9 +158,9 @@ export class GoogleSheetsService {
 				this.logger.log('Создан новый лист с заголовками');
 			} else {
 				// Обновляем заголовки
-				this.logger.log('Обновляем заголовки таблицы...');
+				// this.logger.log('Обновляем заголовки таблицы...');
 				await sheet.setHeaderRow(headers);
-				this.logger.log('Заголовки обновлены');
+				// this.logger.log('Заголовки обновлены');
 			}
 
 			this.logger.log('✓ Таблица успешно инициализирована');
@@ -200,7 +200,7 @@ export class GoogleSheetsService {
 			// Добавляем строку
 			await sheet.addRow(rowData);
 
-			this.logger.log(`Успешно добавлена строка для записи: ${data.record_id}`);
+			// this.logger.log(`Успешно добавлена строка для записи: ${data.record_id}`);
 			
 			return {
 				success: true,
@@ -243,7 +243,7 @@ export class GoogleSheetsService {
 			// Добавляем все строки за один раз
 			await sheet.addRows(rowsData);
 
-			this.logger.log(`Успешно добавлено ${dataArray.length} строк в Google Sheets`);
+			// this.logger.log(`Успешно добавлено ${dataArray.length} строк в Google Sheets`);
 			
 			return {
 				success: true,

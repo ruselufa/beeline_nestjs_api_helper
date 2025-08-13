@@ -50,14 +50,14 @@ export class ConversationAnalyzerService implements OnApplicationBootstrap {
 	async onApplicationBootstrap() {
 		console.log('ConversationAnalyzerService инициализирован. Первый запуск анализа разговоров через 3 минуты.');
 		
-		// Запускаем анализ разговоров через 3 минуты после старта приложения
+		// // Запускаем анализ разговоров через 3 минуты после старта приложения
 		// setTimeout(async () => {
 		// 	console.log('Запуск первичного анализа разговоров (через 3 минуты после старта)...');
 		// 	// Устанавливаем флаг в false ПЕРЕД вызовом processAnalysis
 		// 	this.isProcessing = false;
 		// 	this.lastStartTime = null;
 		// 	await this.processAnalysis();
-		// }, 5000); // 180000 мс = 3 минуты
+		// }, 1000); // 180000 мс = 3 минуты
 	}
 
 	// Запускаем анализ каждые 15 минут
@@ -371,7 +371,32 @@ export class ConversationAnalyzerService implements OnApplicationBootstrap {
 				this.handleApiSuccess();
 				
 			} catch (error) {
-				// Обрабатываем ошибки API
+				// Проверяем, является ли это ошибкой неполного JSON
+				if ((error as any).isIncompleteJson) {
+					this.logger.error(`❌ Неполный/некорректный JSON ответ для записи ${record.beelineId}. Запись НЕ будет помечена как проанализированная.`);
+					this.logger.error(`🔍 Детали: ${error.message}`);
+					if ((error as any).errorPosition) {
+						this.logger.error(`📍 Позиция ошибки: ${(error as any).errorPosition}`);
+					}
+					
+					// НЕ помечаем запись как проанализированную
+					// НЕ создаем JSON файл
+					// Просто переходим к следующей записи
+					return; // Выходим без ошибки, чтобы не прерывать обработку очереди
+				}
+				
+				// Проверяем сетевые ошибки
+				if (this.isNetworkError(error)) {
+					this.logger.error(`🌐 Сетевая ошибка для записи ${record.beelineId}: ${error.message}`);
+					this.logger.error(`🔍 Код ошибки: ${error.code}, Причина: ${error.cause?.message || 'неизвестно'}`);
+					
+					// НЕ помечаем запись как проанализированную при сетевых ошибках
+					// НЕ создаем JSON файл
+					// Просто переходим к следующей записи
+					return; // Выходим без ошибки
+				}
+				
+				// Обрабатываем другие ошибки API
 				this.handleApiError(error);
 				
 				// Если это 429 или 500 ошибка, добавляем задержку
@@ -389,6 +414,12 @@ export class ConversationAnalyzerService implements OnApplicationBootstrap {
 						);
 						this.handleApiSuccess();
 					} catch (retryError) {
+						// Проверяем, является ли повторная ошибка тоже неполным JSON или сетевой
+						if ((retryError as any).isIncompleteJson || this.isNetworkError(retryError)) {
+							this.logger.error(`❌ Повторная ошибка для записи ${record.beelineId}. Запись пропущена.`);
+							return; // Выходим без ошибки
+						}
+						
 						this.handleApiError(retryError);
 						throw retryError;
 					}
@@ -397,7 +428,7 @@ export class ConversationAnalyzerService implements OnApplicationBootstrap {
 				}
 			}
 
-			// Создаем структурированный результат
+			// Создаем структурированный результат только если анализ прошел успешно
 			const structuredResult = {
 				record_id: record.beelineId,
 				client_phone: record.phone,
@@ -413,28 +444,54 @@ export class ConversationAnalyzerService implements OnApplicationBootstrap {
 			// Сохраняем структурированный результат в файл
 			await fs.writeFile(outputPath, JSON.stringify(structuredResult, null, 2));
 			
-			// Обновляем запись в БД
+			// Обновляем запись в БД только при успешном анализе
 			record.deepseek_analysed = true;
 			record.deepseek_analysis = structuredResult;
 			await this.abonentRecordRepository.save(record);
 
-			this.logger.log(`Запись ${record.beelineId} успешно проанализирована через очередь. Результат сохранен в ${outputPath}`);
+			this.logger.log(`✅ Запись ${record.beelineId} успешно проанализирована через очередь. Результат сохранен в ${outputPath}`);
 
 		} catch (error) {
-			this.logger.error(`Ошибка при обработке записи ${record.beelineId} через очередь: ${error.message}`);
+			this.logger.error(`❌ Ошибка при обработке записи ${record.beelineId} через очередь: ${error.message}`);
 			throw error;
 		}
 	}
 
 	// Методы для адаптивного управления нагрузкой
+	private isNetworkError(error: any): boolean {
+		const networkErrorCodes = [
+			'ECONNRESET',      // Соединение сброшено
+			'ECONNREFUSED',    // Соединение отклонено
+			'ENOTFOUND',       // Хост не найден
+			'ETIMEDOUT',       // Таймаут соединения
+			'ENETUNREACH',     // Сеть недоступна
+			'ECONNABORTED',    // Соединение прервано
+			'ERR_NETWORK',     // Общая сетевая ошибка
+			'ERR_INTERNET_DISCONNECTED', // Интернет отключен
+			'ERR_NETWORK_CHANGED'        // Сеть изменилась
+		];
+		
+		return (
+			networkErrorCodes.includes(error.code) ||
+			error.message?.includes('network') ||
+			error.message?.includes('connection') ||
+			error.message?.includes('timeout') ||
+			error.message?.includes('aborted') ||
+			error.cause?.code === 'ECONNRESET'
+		);
+	}
+
 	private handleApiError(error: any) {
 		this.consecutiveErrors++;
 		this.logger.warn(`API ошибка (${this.consecutiveErrors}/${this.maxConsecutiveErrors}): ${error.message}`);
-		this.logger.warn(`Статус ошибки: ${error.status}, Тип: ${error.type || 'неизвестно'}`);
+		this.logger.warn(`Статус ошибки: ${error.status}, Тип: ${error.type || 'неизвестно'}, Код: ${error.code || 'неизвестно'}`);
 		
-		// Если получили 429, 500 или много ошибок подряд, включаем адаптивный режим
-		if (error.status === 429 || error.status === 500 || this.consecutiveErrors >= this.maxConsecutiveErrors) {
-			this.enableAdaptiveMode();
+		// Для неполных JSON и сетевых ошибок не включаем адаптивный режим
+		if (!(error as any).isIncompleteJson && !this.isNetworkError(error)) {
+			// Если получили 429, 500 или много ошибок подряд, включаем адаптивный режим
+			if (error.status === 429 || error.status === 500 || this.consecutiveErrors >= this.maxConsecutiveErrors) {
+				this.enableAdaptiveMode();
+			}
 		}
 	}
 

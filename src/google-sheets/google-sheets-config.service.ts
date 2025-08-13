@@ -88,16 +88,16 @@ export class GoogleSheetsConfigService {
 			
 			// Извлекаем все ID из всех блоков
 			SHEETS_CONFIG_V2.blocks.forEach(block => {
-				this.logger.log(`Обрабатываем блок: ${block.blockName}`);
+				// this.logger.log(`Обрабатываем блок: ${block.blockName}`);
 				block.headers.forEach(header => {
-					this.logger.log(`Добавляем заголовок: ${header.id} (${header.label})`);
+					// this.logger.log(`Добавляем заголовок: ${header.id} (${header.label})`);
 					if (!headers.includes(header.id)) {
 						headers.push(header.id);
 					}
 				});
 			});
 
-			this.logger.log(`Итоговые заголовки: ${headers.join(', ')}`);
+			// this.logger.log(`Итоговые заголовки: ${headers.join(', ')}`);
 			return headers;
 		} catch (error) {
 			this.logger.warn(`Не удалось загрузить заголовки: ${error.message}`);

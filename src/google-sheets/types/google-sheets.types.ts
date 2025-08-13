@@ -43,42 +43,45 @@ export interface GoogleSheetsRow {
 	payment_agreements?: string;
 	additional_info?: string;
 	greeting_score?: number;
-	greeting_good?: string[];
-	greeting_improve?: string[];
+	greeting_good?: string[] | string; // Может быть массивом или строкой
+	greeting_improve?: string[] | string; // Может быть массивом или строкой
 	greeting_recommendation?: string;
 	programming_score?: number;
-	programming_good?: string[];
-	programming_improve?: string[];
+	programming_good?: string[] | string; // Может быть массивом или строкой
+	programming_improve?: string[] | string; // Может быть массивом или строкой
 	programming_recommendation?: string;
 	needs_score?: number;
-	needs_good?: string[];
-	needs_improve?: string[];
+	needs_good?: string[] | string; // Может быть массивом или строкой
+	needs_improve?: string[] | string; // Может быть массивом или строкой
 	needs_recommendation?: string;
 	summary_score?: number;
-	summary_good?: string[];
-	summary_improve?: string[];
+	summary_good?: string[] | string; // Может быть массивом или строкой
+	summary_improve?: string[] | string; // Может быть массивом или строкой
 	summary_recommendation?: string;
 	presentation_score?: number;
-	presentation_good?: string[];
-	presentation_improve?: string[];
+	presentation_good?: string[] | string; // Может быть массивом или строкой
+	presentation_improve?: string[] | string; // Может быть массивом или строкой
 	presentation_recommendation?: string;
 	objections_score?: number;
-	objections_good?: string[];
-	objections_improve?: string[];
+	objections_good?: string[] | string; // Может быть массивом или строкой
+	objections_improve?: string[] | string; // Может быть массивом или строкой
 	objections_recommendation?: string;
 	closure_score?: number;
-	closure_good?: string[];
-	closure_improve?: string[];
+	closure_good?: string[] | string; // Может быть массивом или строкой
+	closure_improve?: string[] | string; // Может быть массивом или строкой
 	closure_recommendation?: string;
 	total_score?: number;
-	overall_good?: string;
-	overall_improve?: string;
-	overall_recommendations?: string;
+	overall_good?: string[] | string; // Может быть массивом или строкой
+	overall_improve?: string[] | string; // Может быть массивом или строкой
+	overall_recommendations?: string[] | string; // Может быть массивом или строкой
 	recommendation_greeting?: string;
-	recommendation_points?: string;
+	recommendation_points?: string[] | string; // Может быть массивом или строкой
 	recommendation_closing?: string;
 	abonent_name?: string;
 	abonent_phone?: string;
+
+	// Динамические поля из анализа (могут быть любого типа)
+	[key: string]: any;
 
 	// Структура для данных из JSON файла
 	table?: TableData;

@@ -40,11 +40,11 @@ export class RecordsLoaderService implements OnApplicationBootstrap {
     //   this.isProcessing = false;
     //   this.lastStartTime = null;
     //   await this.loadAllUsersRecords();
-    // }, 5000); // 60000 мс = 1 минута
+    // }, 1000); // 60000 мс = 1 минута
   }
 
   // Делаем cron на каждый день в 3:30 ночи
-  @Cron('30 3 * * *')
+  // @Cron('*/15 * * * *')
   async loadAllUsersRecords() {
     if (this.isProcessing) {
       const runningTime = Date.now() - this.lastStartTime.getTime();

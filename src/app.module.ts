@@ -23,7 +23,7 @@ import { GoogleSheetsModule } from './google-sheets/google-sheets.module';
 		}),
 		DatabaseModule,
 		TelegrafModule.forRoot({
-			token: '7506088721:AAF78PYd8iEdw_TAXaZfC7o4IQFy9AcrdHU',
+			token: '7770129607:AAHod1zXpELMOkw1txV4AybHhFRBjEDBfdg',
 			// middlewares: [new SessionFlavor()],
 			// include: { all: true },
 			// providers: [SessionFlavor],
