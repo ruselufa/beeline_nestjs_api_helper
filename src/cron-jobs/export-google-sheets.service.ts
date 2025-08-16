@@ -15,10 +15,11 @@ import * as path from 'path';
 import { SHEETS_CONFIG_V2 } from '../ai_deepseek/config/config.sheets_v2';
 import { Cron } from '@nestjs/schedule';
 import { Worker } from 'worker_threads';
+import { BaseCronService } from './base-cron.service';
 
 @Injectable()
-export class ExportGoogleSheetsService implements OnApplicationBootstrap {
-    private readonly logger = new Logger(ExportGoogleSheetsService.name);
+export class ExportGoogleSheetsService extends BaseCronService implements OnApplicationBootstrap {
+    protected readonly logger = new Logger(ExportGoogleSheetsService.name);
     public isProcessing = false;
     public lastStartTime: Date | null = null;
     private worker: Worker | null = null;
@@ -31,7 +32,9 @@ export class ExportGoogleSheetsService implements OnApplicationBootstrap {
         @InjectRepository(Abonent)
         private readonly abonentRepository: Repository<Abonent>,
         private readonly googleSheetsService: GoogleSheetsService,
-    ) {}
+    ) {
+        super();
+    }
 
     async onApplicationBootstrap() {
         this.logger.log('ExportGoogleSheetsService инициализирован. Экспорт в Google Sheets будет выполняться по расписанию.');
@@ -44,15 +47,15 @@ export class ExportGoogleSheetsService implements OnApplicationBootstrap {
             this.logger.error('❌ Не удалось подключиться к Google Sheets');
         }
 
-        // setTimeout(async () => {
-        //     this.isProcessing = false;
-        //     this.lastStartTime = null;
-        //     await this.processExport();
-        // }, 1000);
+        setTimeout(async () => {
+            this.isProcessing = false;
+            this.lastStartTime = null;
+            await this.processExport();
+        }, 1000);
     }
 
-    // Запускаем экспорт каждый 15 min
-    // @Cron('*/1 * * * *')
+    // Запускаем экспорт каждый 30 минут
+    @Cron('*/30 * * * *')
     async processExport() {
         if (this.isProcessing) {
             const runningTime = Date.now() - this.lastStartTime.getTime();
@@ -66,10 +69,10 @@ export class ExportGoogleSheetsService implements OnApplicationBootstrap {
         try {
             this.logger.log('Запуск cron-задачи: экспорт в Google Sheets');
             // Временно используем обычную обработку вместо worker
-            await this.processExportToGoogleSheets();
-            this.logger.log('Экспорт в Google Sheets успешно завершен');
+            const results = await this.processExportToGoogleSheets();
+            this.logger.log(`Экспорт в Google Sheets завершен. Успешно: ${results.success}, Ошибок: ${results.errors}`);
         } catch (error) {
-            this.logger.error('Ошибка выполнения экспорта в Google Sheets:', error);
+            this.logger.error('Критическая ошибка выполнения экспорта в Google Sheets:', error);
         } finally {
             this.isProcessing = false;
             this.lastStartTime = null;
@@ -123,87 +126,85 @@ export class ExportGoogleSheetsService implements OnApplicationBootstrap {
     }
 
     async processExportToGoogleSheets() {
-        let offset = 0;
-        const batchSize = 10; // Уменьшил размер пакета для Google Sheets
-        let processedTotal = 0;
+        try {
+            // Проверяем условия поиска
+            const whereConditions = {
+                beeline_download: true,
+                transcribe_processed: true,
+                deepseek_analysed: true,
+                to_short: false,
+                duration: MoreThan(240000),
+                google_sheets_export: false
+            };
+            
+            this.logger.log('Условия поиска записей:');
+            this.logger.log(JSON.stringify(whereConditions, null, 10));
 
-        // Проверяем условия поиска
-        const whereConditions = {
-            beeline_download: true,
-            transcribe_processed: true,
-            deepseek_analysed: true,
-            to_short: false,
-            duration: MoreThan(240000),
-            google_sheets_export: false
-        };
-        
-        this.logger.log('Условия поиска записей:');
-        this.logger.log(JSON.stringify(whereConditions, null, 10));
+            const totalRecords = await this.abonentRecordRepository.count({
+                where: whereConditions
+            });
+            
+            this.logger.log(`Всего найдено записей длительностью > 4 минут для экспорта в Google Sheets: ${totalRecords}`);
 
-        const totalRecords = await this.abonentRecordRepository.count({
-            where: whereConditions
-        });
-        
-        this.logger.log(`Всего найдено записей длительностью > 4 минут для экспорта в Google Sheets: ${totalRecords}`);
+            if (totalRecords === 0) {
+                this.logger.log('Нет записей для экспорта');
+                return { success: 0, errors: 0, total: 0 };
+            }
 
-        while (true) {
+            // Получаем все записи для обработки
             const records = await this.abonentRecordRepository.find({
                 where: whereConditions,
                 order: { date: 'DESC' },
-                skip: offset,
-                take: batchSize,
                 relations: ['abonent']
             });
+
+            // Используем базовый метод обработки с обработкой ошибок
+            return await this.processWithErrorHandling(
+                records,
+                async (record) => {
+                    await this.processRecordForExport(record);
+                },
+                'запись экспорта'
+            );
+
+        } catch (error) {
+            this.logger.error('Критическая ошибка при получении записей для экспорта:', error);
+            throw error;
+        }
+    }
+
+    private async processRecordForExport(record: AbonentRecord): Promise<void> {
+        try {
+            this.logger.log(`Обрабатываем запись ${record.id}...`);
             
-            if (!records.length) {
-                this.logger.log('Больше записей для обработки не найдено');
-                break;
-            }
-            
-            this.logger.log(`Найдено ${records.length} записей для обработки`);
-            
-            const rowsToExport: GoogleSheetsRow[] = [];
-            
-            for (const record of records) {
-                try {
-                    this.logger.log(`Обрабатываем запись ${record.id}...`);
-                    const exportRow = await this.prepareRecordForExport(record);
-                    if (exportRow) {
-                        rowsToExport.push(exportRow);
-                        this.logger.log(`Запись ${record.id} успешно подготовлена для экспорта`);
-                    }
-                } catch (error) {
-                    this.logger.error(`Ошибка подготовки записи ${record.id}: ${error.message}`);
-                }
+            // Подготавливаем запись для экспорта
+            const exportRow = await this.prepareRecordForExport(record);
+            if (!exportRow) {
+                this.logger.warn(`Запись ${record.id} не может быть подготовлена для экспорта`);
+                return;
             }
 
-            // Экспортируем пакет записей в Google Sheets
-            if (rowsToExport.length > 0) {
-                this.logger.log(`Экспортируем ${rowsToExport.length} записей в Google Sheets...`);
-                const result = await this.googleSheetsService.writeMultipleRows(rowsToExport);
-                
-                if (result.success) {
-                    // Помечаем записи как экспортированные
-                    for (const record of records.slice(0, rowsToExport.length)) {
-                        record.google_sheets_export = true;
-                        await this.abonentRecordRepository.save(record);
-                    }
-                    
-                    processedTotal += rowsToExport.length;
-                    this.logger.log(`✓ Экспортировано ${rowsToExport.length} записей в Google Sheets`);
-                } else {
-                    this.logger.error(`❌ Ошибка экспорта в Google Sheets: ${result.error}`);
-                    break; // Прерываем при ошибке
-                }
+            // Экспортируем одну запись
+            const result = await this.googleSheetsService.writeMultipleRows([exportRow]);
+            
+            if (result.success) {
+                // Помечаем запись как экспортированную
+                record.google_sheets_export = true;
+                await this.abonentRecordRepository.save(record);
+                this.logger.log(`✅ Запись ${record.id} успешно экспортирована в Google Sheets`);
+            } else {
+                throw new Error(`Ошибка экспорта в Google Sheets: ${result.error}`);
             }
             
-            offset += batchSize;
+        } catch (error) {
+            this.logger.error(`❌ Ошибка при обработке записи ${record.id} для экспорта: ${error.message}`);
             
-            // Пауза между пакетами для избежания rate limiting
-            await new Promise(resolve => setTimeout(resolve, 1000));
+            // Анализируем тип ошибки
+            this.logErrorDetails(error, record);
+            
+            // Перебрасываем ошибку для обработки в базовом классе
+            throw error;
         }
-        
-        this.logger.log(`Обработка завершена. Всего обработано записей: ${processedTotal} из ${totalRecords}`);
     }
 
     private async getClientData(phone: string): Promise<any> {
@@ -327,7 +328,7 @@ export class ExportGoogleSheetsService implements OnApplicationBootstrap {
             
             // Проверяем, что JSON файл анализа существует
             const jsonPath = path.join(process.cwd(), 'export', 'json', `${record.beelineId}_client_${record.phone}_analysis.json`);
-            const jsonExists = await fs.access(jsonPath).then(() => true).catch(() => false);
+            const jsonExists = await this.safeFileExists(jsonPath);
             
             if (!jsonExists) {
                 this.logger.warn(`JSON файл анализа не найден для записи ${record.id}: ${jsonPath}`);
@@ -367,21 +368,9 @@ export class ExportGoogleSheetsService implements OnApplicationBootstrap {
                 abonent_phone: abonent?.phone || '',
             };
 
-            // this.logger.log(`Базовые данные записи ${record.id}:`);
-            // this.logger.log(`- Record ID: ${exportRow.record_id}`);
-            // this.logger.log(`- Department: ${exportRow.department}`);
-            // this.logger.log(`- Manager Name: ${exportRow.manager_name}`);
-            // this.logger.log(`- Duration: ${exportRow.duration_seconds} сек`);
-
             // Если есть данные анализа, добавляем их
             if (analysisData && analysisData.table && Array.isArray(analysisData.table.blocks)) {
-                // this.logger.log('Начинаем обработку блоков данных анализа...');
-                // this.logger.log(`Найдено блоков: ${analysisData.table.blocks.length}`);
-                
                 analysisData.table.blocks.forEach((block, blockIndex) => {
-                    // this.logger.log(`Обработка блока ${blockIndex + 1}: ${block.blockName}`);
-                    // this.logger.log(`Количество заголовков в блоке: ${block.headers?.length || 0}`);
-                    
                     if (Array.isArray(block.headers)) {
                         block.headers.forEach(header => {
                             try {
@@ -392,15 +381,12 @@ export class ExportGoogleSheetsService implements OnApplicationBootstrap {
                                     if (Array.isArray(value)) {
                                         // Если это массив, объединяем элементы через запятую и пробел
                                         exportRow[header.id] = value.join(', ');
-                                        // this.logger.log(`Добавлено поле ${header.id} (массив): ${exportRow[header.id]}`);
                                     } else if (typeof value === 'string') {
                                         // Если это строка, оставляем как есть
                                         exportRow[header.id] = value;
-                                        // this.logger.log(`Добавлено поле ${header.id} (строка): ${exportRow[header.id]}`);
                                     } else {
                                         // Если значение null/undefined, устанавливаем пустую строку
                                         exportRow[header.id] = '';
-                                        // this.logger.log(`Добавлено поле ${header.id} (пустое): пустая строка`);
                                     }
                                 } else if (header.type === 'numeric') {
                                     // Обработка числовых значений
@@ -410,11 +396,9 @@ export class ExportGoogleSheetsService implements OnApplicationBootstrap {
                                         const num = Number(value);
                                         exportRow[header.id] = isNaN(num) ? '0' : num.toString();
                                     }
-                                    // this.logger.log(`Добавлено поле ${header.id} (число): ${exportRow[header.id]}`);
                                 } else {
                                     // Обработка текстовых значений
                                     exportRow[header.id] = value || '';
-                                    // this.logger.log(`Добавлено поле ${header.id} (текст): ${exportRow[header.id]}`);
                                 }
                             } catch (error) {
                                 this.logger.error(`Ошибка при обработке поля ${header.id}: ${error.message}`);
@@ -427,14 +411,6 @@ export class ExportGoogleSheetsService implements OnApplicationBootstrap {
             } else {
                 this.logger.warn('Данные анализа отсутствуют или имеют неверный формат');
             }
-
-            // Логируем примеры полей с массивами для отладки
-            const arrayFields = ['greeting_good', 'greeting_improve', 'needs_good', 'needs_improve', 'what_was_good', 'what_to_improve', 'recommendations'];
-            arrayFields.forEach(field => {
-                if (exportRow[field] !== undefined) {
-                    // this.logger.log(`Поле ${field}: "${exportRow[field]}" (тип: ${typeof exportRow[field]})`);
-                }
-            });
 
             this.logger.log(`Запись ${record.id} успешно подготовлена для экспорта`);
             return exportRow;

@@ -9,6 +9,7 @@ import { Cron } from '@nestjs/schedule';
 import { MoreThan } from 'typeorm';
 import { AnalyzedAi } from '../entities/beeline/analyzed_ai.entity';
 import { Worker } from 'worker_threads';
+import { BaseCronService } from './base-cron.service';
 
 interface QueueItem {
 	record: AbonentRecord;
@@ -17,8 +18,8 @@ interface QueueItem {
 }
 
 @Injectable()
-export class ConversationAnalyzerService implements OnApplicationBootstrap {
-	private readonly logger = new Logger(ConversationAnalyzerService.name);
+export class ConversationAnalyzerService extends BaseCronService implements OnApplicationBootstrap {
+	protected readonly logger = new Logger(ConversationAnalyzerService.name);
 	private readonly exportDir = path.join(process.cwd(), 'export');
 	public isProcessing = false;
 	public lastStartTime: Date | null = null;
@@ -45,27 +46,29 @@ export class ConversationAnalyzerService implements OnApplicationBootstrap {
 		private readonly abonentRecordRepository: Repository<AbonentRecord>,
 		@InjectRepository(AnalyzedAi)
 		private readonly analyzedAiRepository: Repository<AnalyzedAi>,
-	) { }
+	) { 
+		super();
+	}
 
 	async onApplicationBootstrap() {
-		console.log('ConversationAnalyzerService инициализирован. Первый запуск анализа разговоров через 3 минуты.');
+		this.logger.log('ConversationAnalyzerService инициализирован. Первый запуск анализа разговоров через 3 минуты.');
 		
-		// // Запускаем анализ разговоров через 3 минуты после старта приложения
+		// Запускаем анализ разговоров через 3 минуты после старта приложения
 		// setTimeout(async () => {
-		// 	console.log('Запуск первичного анализа разговоров (через 3 минуты после старта)...');
+		// 	this.logger.log('Запуск первичного анализа разговоров (через 3 минуты после старта)...');
 		// 	// Устанавливаем флаг в false ПЕРЕД вызовом processAnalysis
 		// 	this.isProcessing = false;
 		// 	this.lastStartTime = null;
 		// 	await this.processAnalysis();
-		// }, 1000); // 180000 мс = 3 минуты
+		// }, 3000); // 180000 мс = 3 минуты
 	}
 
-	// Запускаем анализ каждые 15 минут
-	// @Cron('*/15 * * * *')
+	// Запускаем анализ в 21.30
+	@Cron('30 21 * * *')
 	async processAnalysis() {
 		if (this.isProcessing) {
 			const runningTime = Date.now() - this.lastStartTime.getTime();
-			console.warn(`Анализ разговоров уже выполняется ${Math.floor(runningTime / 1000)} секунд, пропускаем запуск`);
+			this.logger.warn(`Анализ разговоров уже выполняется ${Math.floor(runningTime / 1000)} секунд, пропускаем запуск`);
 			return;
 		}
 
@@ -73,12 +76,12 @@ export class ConversationAnalyzerService implements OnApplicationBootstrap {
 		this.lastStartTime = new Date();
 		
 		try {
-			console.log('Запуск cron-задачи: анализ разговоров');
+			this.logger.log('Запуск cron-задачи: анализ разговоров');
 			// Используем новую систему очереди
-			await this.processFreshRecordsForAnalysisWithQueue();
-			console.log('Анализ разговоров успешно завершен');
+			const results = await this.processFreshRecordsForAnalysisWithQueue();
+			this.logger.log(`Анализ разговоров завершен. Успешно: ${results.success}, Ошибок: ${results.errors}`);
 		} catch (error) {
-			console.error('Ошибка выполнения анализа разговоров:', error);
+			this.logger.error('Критическая ошибка выполнения анализа разговоров:', error);
 		} finally {
 			this.isProcessing = false;
 			this.lastStartTime = null;
@@ -101,11 +104,11 @@ export class ConversationAnalyzerService implements OnApplicationBootstrap {
 			});
 
 			this.worker.on('message', (message) => {
-				console.log('Worker сообщение:', message);
+				this.logger.log('Worker сообщение:', message);
 				if (message.type === 'progress') {
-					console.log(`Прогресс анализа разговоров: ${message.data}`);
+					this.logger.log(`Прогресс анализа разговоров: ${message.data}`);
 				} else if (message.type === 'complete') {
-					console.log('Анализ разговоров завершен в worker');
+					this.logger.log('Анализ разговоров завершен в worker');
 					this.worker?.terminate();
 					this.worker = null;
 					resolve(message.data);
@@ -113,7 +116,7 @@ export class ConversationAnalyzerService implements OnApplicationBootstrap {
 			});
 
 			this.worker.on('error', (error) => {
-				console.error('Ошибка в worker:', error);
+				this.logger.error('Ошибка в worker:', error);
 				this.worker?.terminate();
 				this.worker = null;
 				reject(error);
@@ -121,7 +124,7 @@ export class ConversationAnalyzerService implements OnApplicationBootstrap {
 
 			this.worker.on('exit', (code) => {
 				if (code !== 0) {
-					console.error(`Worker завершился с кодом ${code}`);
+					this.logger.error(`Worker завершился с кодом ${code}`);
 					reject(new Error(`Worker завершился с кодом ${code}`));
 				}
 			});
@@ -146,19 +149,20 @@ export class ConversationAnalyzerService implements OnApplicationBootstrap {
 
 			this.logger.log(`Найдено ${records.length} записей для анализа`);
 
-			let processedCount = 0;
-			for (const record of records) {
-				try {
-					await this.processRecord(record);
-					processedCount++;
-					this.logger.log(`Запись ${record.beelineId} успешно проанализирована. (Прогресс: ${processedCount}/${records.length})`);
-				} catch (error) {
-					this.logger.error(`Ошибка при анализе записи ${record.beelineId}: ${error.message}`);
-					continue;
-				}
+			if (records.length === 0) {
+				this.logger.log('Нет записей для анализа');
+				return { success: 0, errors: 0, total: 0 };
 			}
 
-			this.logger.log(`Анализ завершен. Обработано записей: ${processedCount} из ${records.length}`);
+			// Используем базовый метод обработки с обработкой ошибок
+			return await this.processWithErrorHandling(
+				records,
+				async (record) => {
+					await this.processRecord(record);
+				},
+				'запись анализа'
+			);
+
 		} catch (error) {
 			this.logger.error(`Ошибка при обработке записей: ${error.message}`);
 			throw error;
@@ -169,7 +173,7 @@ export class ConversationAnalyzerService implements OnApplicationBootstrap {
 		try {
 			// Проверяем, что txt файл существует
 			const txtPath = path.join(this.exportDir, 'txt', `${record.beelineId}_client_${record.phone}.txt`);
-			const txtExists = await fs.access(txtPath).then(() => true).catch(() => false);
+			const txtExists = await this.safeFileExists(txtPath);
 			
 			if (!txtExists) {
 				this.logger.warn(`TXT файл не найден для записи ${record.beelineId}: ${txtPath}`);
@@ -178,7 +182,7 @@ export class ConversationAnalyzerService implements OnApplicationBootstrap {
 
 			// Проверяем, что JSON файл анализа еще не существует
 			const outputPath = path.join(this.exportDir, 'json', `${record.beelineId}_client_${record.phone}_analysis.json`);
-			const jsonExists = await fs.access(outputPath).then(() => true).catch(() => false);
+			const jsonExists = await this.safeFileExists(outputPath);
 			
 			if (jsonExists) {
 				this.logger.log(`Файл анализа уже существует для записи ${record.beelineId}: ${outputPath}`);
@@ -216,10 +220,15 @@ export class ConversationAnalyzerService implements OnApplicationBootstrap {
 			record.deepseek_analysis = structuredResult;
 			await this.abonentRecordRepository.save(record);
 
-			this.logger.log(`Запись ${record.beelineId} успешно проанализирована. Результат сохранен в ${outputPath}`);
+			this.logger.log(`✅ Запись ${record.beelineId} успешно проанализирована. Результат сохранен в ${outputPath}`);
 
 		} catch (error) {
-			this.logger.error(`Ошибка при обработке записи ${record.beelineId}: ${error.message}`);
+			this.logger.error(`❌ Ошибка при обработке записи ${record.beelineId}: ${error.message}`);
+			
+			// Анализируем тип ошибки
+			this.logErrorDetails(error, record);
+			
+			// Перебрасываем ошибку для обработки в базовом классе
 			throw error;
 		}
 	}
@@ -227,7 +236,7 @@ export class ConversationAnalyzerService implements OnApplicationBootstrap {
 	// Оставляем старый метод для обратной совместимости
 	async processFiles() {
 		this.logger.warn('Метод processFiles устарел. Используйте processFreshRecordsForAnalysis');
-		await this.processFreshRecordsForAnalysis();
+		return await this.processFreshRecordsForAnalysis();
 	}
 
 	async processFreshRecordsForAnalysisWithQueue() {
@@ -247,7 +256,7 @@ export class ConversationAnalyzerService implements OnApplicationBootstrap {
 
 			if (records.length === 0) {
 				this.logger.log('Нет записей для анализа');
-				return;
+				return { success: 0, errors: 0, total: 0 };
 			}
 
 			// Добавляем все записи в очередь
@@ -264,6 +273,8 @@ export class ConversationAnalyzerService implements OnApplicationBootstrap {
 			const failed = results.filter(r => r.status === 'rejected').length;
 			
 			this.logger.log(`Обработка очереди завершена. Успешно: ${successful}, Ошибок: ${failed}`);
+			
+			return { success: successful, errors: failed, total: records.length };
 			
 		} catch (error) {
 			this.logger.error(`Ошибка при обработке записей через очередь: ${error.message}`);
@@ -339,7 +350,7 @@ export class ConversationAnalyzerService implements OnApplicationBootstrap {
 		try {
 			// Проверяем, что txt файл существует
 			const txtPath = path.join(this.exportDir, 'txt', `${record.beelineId}_client_${record.phone}.txt`);
-			const txtExists = await fs.access(txtPath).then(() => true).catch(() => false);
+			const txtExists = await this.safeFileExists(txtPath);
 			
 			if (!txtExists) {
 				this.logger.warn(`TXT файл не найден для записи ${record.beelineId}: ${txtPath}`);
@@ -348,7 +359,7 @@ export class ConversationAnalyzerService implements OnApplicationBootstrap {
 
 			// Проверяем, что JSON файл анализа еще не существует
 			const outputPath = path.join(this.exportDir, 'json', `${record.beelineId}_client_${record.phone}_analysis.json`);
-			const jsonExists = await fs.access(outputPath).then(() => true).catch(() => false);
+			const jsonExists = await this.safeFileExists(outputPath);
 			
 			if (jsonExists) {
 				this.logger.log(`Файл анализа уже существует для записи ${record.beelineId}: ${outputPath}`);
@@ -453,6 +464,11 @@ export class ConversationAnalyzerService implements OnApplicationBootstrap {
 
 		} catch (error) {
 			this.logger.error(`❌ Ошибка при обработке записи ${record.beelineId} через очередь: ${error.message}`);
+			
+			// Анализируем тип ошибки
+			this.logErrorDetails(error, record);
+			
+			// Перебрасываем ошибку для обработки в базовом классе
 			throw error;
 		}
 	}

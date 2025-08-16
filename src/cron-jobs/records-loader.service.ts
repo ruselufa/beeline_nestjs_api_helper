@@ -7,6 +7,8 @@ import { BeelineApiCallService } from '../beeline_api_call/beeline_api_call.serv
 import { Cron } from '@nestjs/schedule';
 import { Worker } from 'worker_threads';
 import * as path from 'path';
+import { BaseCronService } from './base-cron.service';
+import { Logger } from '@nestjs/common';
 
 function chunks<T>(array: T[], size: number): T[][] {
   const result: T[][] = [];
@@ -17,7 +19,8 @@ function chunks<T>(array: T[], size: number): T[][] {
 }
 
 @Injectable()
-export class RecordsLoaderService implements OnApplicationBootstrap {
+export class RecordsLoaderService extends BaseCronService implements OnApplicationBootstrap {
+  protected readonly logger = new Logger(RecordsLoaderService.name);
   public isProcessing = false;
   public lastStartTime: Date | null = null;
   private worker: Worker | null = null;
@@ -28,27 +31,29 @@ export class RecordsLoaderService implements OnApplicationBootstrap {
     private readonly abonentRepository: Repository<Abonent>,
     @InjectRepository(AbonentRecord)
     private readonly abonentRecordRepository: Repository<AbonentRecord>,
-  ) {}
-
-  async onApplicationBootstrap() {
-    console.log('RecordsLoaderService инициализирован. Загрузка записей начнется через 1 минуту после старта приложения.');
-    
-    // Запускаем загрузку записей через 1 минуту после старта приложения
-    // setTimeout(async () => {
-    //   console.log('Запуск первичной загрузки записей (через 1 минуту после старта)...');
-    //   // Устанавливаем флаги в начальное состояние ПЕРЕД вызовом
-    //   this.isProcessing = false;
-    //   this.lastStartTime = null;
-    //   await this.loadAllUsersRecords();
-    // }, 1000); // 60000 мс = 1 минута
+  ) {
+    super();
   }
 
-  // Делаем cron на каждый день в 3:30 ночи
-  // @Cron('*/15 * * * *')
+  async onApplicationBootstrap() {
+    this.logger.log('RecordsLoaderService инициализирован. Загрузка записей начнется через 1 минуту после старта приложения.');
+    
+    // Запускаем загрузку записей через 1 минуту после старта приложения
+    setTimeout(async () => {
+      this.logger.log('Запуск первичной загрузки записей (через 1 минуту после старта)...');
+      // Устанавливаем флаги в начальное состояние ПЕРЕД вызовом
+      this.isProcessing = false;
+      this.lastStartTime = null;
+      await this.loadAllUsersRecords();
+    }, 1000); // 60000 мс = 1 минута
+  }
+
+  // Делаем загрузку каждый 15 минут
+  @Cron('*/15 * * * *')
   async loadAllUsersRecords() {
     if (this.isProcessing) {
       const runningTime = Date.now() - this.lastStartTime.getTime();
-      console.warn(`Загрузка записей уже выполняется ${Math.floor(runningTime / 1000)} секунд, пропускаем запуск`);
+      this.logger.warn(`Загрузка записей уже выполняется ${Math.floor(runningTime / 1000)} секунд, пропускаем запуск`);
       return;
     }
 
@@ -56,12 +61,12 @@ export class RecordsLoaderService implements OnApplicationBootstrap {
     this.lastStartTime = new Date();
     
     try {
-      console.log('Запуск cron-задачи: загрузка записей всех пользователей');
+      this.logger.log('Запуск cron-задачи: загрузка записей всех пользователей');
       // Временно используем обычную обработку вместо worker
-      await this.loadAllAbonentsRecords();
-      console.log('Загрузка записей успешно завершена');
+      const results = await this.loadAllAbonentsRecords();
+      this.logger.log(`Загрузка записей завершена. Успешно: ${results.success}, Ошибок: ${results.errors}`);
     } catch (error) {
-      console.error('Ошибка выполнения загрузки записей:', error);
+      this.logger.error('Критическая ошибка выполнения загрузки записей:', error);
     } finally {
       this.isProcessing = false;
       this.lastStartTime = null;
@@ -84,11 +89,11 @@ export class RecordsLoaderService implements OnApplicationBootstrap {
       });
 
       this.worker.on('message', (message) => {
-        console.log('Worker сообщение:', message);
+        this.logger.log('Worker сообщение:', message);
         if (message.type === 'progress') {
-          console.log(`Прогресс загрузки записей: ${message.data}`);
+          this.logger.log(`Прогресс загрузки записей: ${message.data}`);
         } else if (message.type === 'complete') {
-          console.log('Загрузка записей завершена в worker');
+          this.logger.log('Загрузка записей завершена в worker');
           this.worker?.terminate();
           this.worker = null;
           resolve(message.data);
@@ -96,7 +101,7 @@ export class RecordsLoaderService implements OnApplicationBootstrap {
       });
 
       this.worker.on('error', (error) => {
-        console.error('Ошибка в worker:', error);
+        this.logger.error('Ошибка в worker:', error);
         this.worker?.terminate();
         this.worker = null;
         reject(error);
@@ -104,7 +109,7 @@ export class RecordsLoaderService implements OnApplicationBootstrap {
 
       this.worker.on('exit', (code) => {
         if (code !== 0) {
-          console.error(`Worker завершился с кодом ${code}`);
+          this.logger.error(`Worker завершился с кодом ${code}`);
           reject(new Error(`Worker завершился с кодом ${code}`));
         }
       });
@@ -115,131 +120,210 @@ export class RecordsLoaderService implements OnApplicationBootstrap {
   }
 
   private async loadAllAbonentsRecords() {
-    const abonents = await this.abonentRepository.find();
-    console.log(`Найдено ${abonents.length} абонентов для загрузки записей`);
+    try {
+      const abonents = await this.abonentRepository.find();
+      this.logger.log(`Найдено ${abonents.length} абонентов для загрузки записей`);
 
-    for (const chunk of chunks(abonents, 5)) {
-      await Promise.all(chunk.map(async (abonent) => {
-        try {
+      if (abonents.length === 0) {
+        this.logger.log('Нет абонентов для обработки');
+        return { success: 0, errors: 0, total: 0 };
+      }
+
+      // Используем пакетную обработку с обработкой ошибок
+      return await this.processBatchWithErrorHandling(
+        abonents,
+        async (abonent) => {
           await this.loadAndSaveRecordsForUserFromLastRecord(abonent.userId);
-          console.log(`Обработан абонент ${abonent.userId}`);
-        } catch (err) {
-          console.error(`Ошибка: ${abonent.userId}`, err);
-        }
-      }));
+        },
+        5, // размер пакета
+        'абонент'
+      );
+      
+    } catch (error) {
+      this.logger.error('Ошибка при получении списка абонентов:', error);
+      throw error;
     }
-    console.log('Загрузка записей для всех пользователей завершена');
   }
 
   async loadAllUsersRecordsFromLastRecord() {
     try {
       // Получаем всех абонентов
       const abonents = await this.abonentRepository.find();
-      console.log(`Найдено ${abonents.length} абонентов для загрузки записей`);
+      this.logger.log(`Найдено ${abonents.length} абонентов для загрузки записей`);
+
+      if (abonents.length === 0) {
+        this.logger.log('Нет абонентов для обработки');
+        return { success: 0, errors: 0, total: 0 };
+      }
 
       // Для каждого абонента загружаем записи с момента последней сохраненной
-      for (const abonent of abonents) {
-        try {
+      return await this.processWithErrorHandling(
+        abonents,
+        async (abonent) => {
           await this.loadAndSaveRecordsForUserFromLastRecord(abonent.userId);
-        } catch (error) {
-          console.error(`Ошибка при загрузке записей для пользователя ${abonent.userId}:`, error);
-          // Продолжаем с следующим пользователем даже если произошла ошибка
-          continue;
-        }
-      }
+        },
+        'абонент'
+      );
+      
     } catch (error) {
-      console.error('Ошибка при загрузке записей для всех пользователей:', error);
+      this.logger.error('Ошибка при загрузке записей для всех пользователей:', error);
+      throw error;
     }
   }
 
   async loadAndSaveRecordsForUser(userId: string, dateFrom?: string, dateTo?: string) {
-    const records = await this.beelineApiCallService.getAllRecordsByUserId(userId, dateFrom, dateTo);
-    const abonent = await this.abonentRepository.findOne({ where: { userId } });
+    try {
+      const records = await this.beelineApiCallService.getAllRecordsByUserId(userId, dateFrom, dateTo);
+      const abonent = await this.abonentRepository.findOne({ where: { userId } });
 
-    for (const record of records) {
-      // Проверка на дублирование по beelineId
-      const exists = await this.abonentRecordRepository.findOne({
-        where: { beelineId: record.id },
-      });
-      if (exists) {
-        console.log(`Запись ${record.id} уже существует`);
-        continue;
-      };
+      if (!abonent) {
+        throw new Error(`Абонент с userId ${userId} не найден`);
+      }
 
-      const entity = this.abonentRecordRepository.create({
-        beelineId: record.id,
-        beelineExternalId: record.externalId,
-        callId: record.callId || null,
-        phone: record.phone,
-        direction: record.direction,
-        date: new Date(Number(record.date)), // если приходит timestamp
-        duration: record.duration,
-        fileSize: record.fileSize,
-        comment: record.comment || '',
-        abonent: abonent,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      });
-      await this.abonentRecordRepository.save(entity);
-      console.log(`Загружен и сохранен запись: ${record.id}`);
+      let savedCount = 0;
+      let errorCount = 0;
+
+      for (const record of records) {
+        try {
+          // Проверка на дублирование по beelineId
+          const exists = await this.abonentRecordRepository.findOne({
+            where: { beelineId: record.id },
+          });
+          
+          if (exists) {
+            this.logger.log(`Запись ${record.id} уже существует`);
+            continue;
+          }
+
+          const entity = this.abonentRecordRepository.create({
+            beelineId: record.id,
+            beelineExternalId: record.externalId,
+            callId: record.callId || null,
+            phone: record.phone,
+            direction: record.direction,
+            date: new Date(Number(record.date)), // если приходит timestamp
+            duration: record.duration,
+            fileSize: record.fileSize,
+            comment: record.comment || '',
+            abonent: abonent,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          });
+          
+          await this.abonentRecordRepository.save(entity);
+          savedCount++;
+          this.logger.log(`✅ Загружен и сохранен запись: ${record.id}`);
+          
+        } catch (error) {
+          errorCount++;
+          this.logger.error(`❌ Ошибка при обработке записи ${record.id}: ${error.message}`);
+          this.logErrorDetails(error, record);
+          
+          // Продолжаем с следующей записью
+          continue;
+        }
+      }
+      
+      this.logger.log(`📊 Загрузка завершена для пользователя ${userId}. Успешно: ${savedCount}, Ошибок: ${errorCount}`);
+      return { savedCount, errorCount, total: records.length };
+      
+    } catch (error) {
+      this.logger.error(`❌ Ошибка при загрузке записей для пользователя ${userId}: ${error.message}`);
+      throw error;
     }
-    console.log(`Загружено и сохранено ${records.length} записей`);
   }
 
   private async getLastRecordDate(userId: string): Promise<string | undefined> {
-    const lastRecord = await this.abonentRecordRepository.findOne({
-      where: { abonent: { userId } },
-      order: { date: 'DESC' },
-    });
+    try {
+      const lastRecord = await this.abonentRecordRepository.findOne({
+        where: { abonent: { userId } },
+        order: { date: 'DESC' },
+      });
 
-    return lastRecord 
-      ? new Date(lastRecord.date.getTime() + 1000).toISOString()
-      : undefined;
+      return lastRecord 
+        ? new Date(lastRecord.date.getTime() + 1000).toISOString()
+        : undefined;
+    } catch (error) {
+      this.logger.error(`❌ Ошибка при получении даты последней записи для ${userId}: ${error.message}`);
+      return undefined;
+    }
   }
 
   async loadAndSaveRecordsForUserFromLastRecord(userId: string, dateTo?: string) {
-    const dateFrom = await this.getLastRecordDate(userId);
-    const records = await this.beelineApiCallService.getAllRecordsByUserIdFromLastRecord(
-      userId,
-      dateFrom,
-      dateTo
-    );
-    const abonent = await this.abonentRepository.findOne({ where: { userId } });
+    try {
+      const dateFrom = await this.getLastRecordDate(userId);
+      const records = await this.beelineApiCallService.getAllRecordsByUserIdFromLastRecord(
+        userId,
+        dateFrom,
+        dateTo
+      );
+      
+      const abonent = await this.abonentRepository.findOne({ where: { userId } });
 
-    if (!abonent) {
-      console.log(`Абонент с userId ${userId} не найден`);
-      return;
-    }
-
-    let savedCount = 0;
-    for (const record of records) {
-      // Проверка на дублирование по beelineId
-      const exists = await this.abonentRecordRepository.findOne({
-        where: { beelineId: record.id },
-      });
-      if (exists) {
-        console.log(`Запись ${record.id} уже существует`);
-        continue;
+      if (!abonent) {
+        this.logger.warn(`Абонент с userId ${userId} не найден`);
+        return { savedCount: 0, errorCount: 0, total: 0 };
       }
 
-      const entity = this.abonentRecordRepository.create({
-        beelineId: record.id,
-        beelineExternalId: record.externalId,
-        callId: record.callId || null,
-        phone: record.phone,
-        direction: record.direction,
-        date: new Date(Number(record.date)),
-        duration: record.duration,
-        fileSize: record.fileSize,
-        comment: record.comment || '',
-        abonent: abonent,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      });
-      await this.abonentRecordRepository.save(entity);
-      savedCount++;
-      console.log(`Загружена и сохранена запись: ${record.id}`);
+      if (records.length === 0) {
+        this.logger.log(`Нет новых записей для пользователя ${userId}`);
+        return { savedCount: 0, errorCount: 0, total: 0 };
+      }
+
+      let savedCount = 0;
+      let errorCount = 0;
+
+      // Обрабатываем записи с обработкой ошибок
+      for (const record of records) {
+        try {
+          // Проверка на дублирование по beelineId
+          const exists = await this.abonentRecordRepository.findOne({
+            where: { beelineId: record.id },
+          });
+          
+          if (exists) {
+            this.logger.log(`Запись ${record.id} уже существует`);
+            continue;
+          }
+
+          const entity = this.abonentRecordRepository.create({
+            beelineId: record.id,
+            beelineExternalId: record.externalId,
+            callId: record.callId || null,
+            phone: record.phone,
+            direction: record.direction,
+            date: new Date(Number(record.date)),
+            duration: record.duration,
+            fileSize: record.fileSize,
+            comment: record.comment || '',
+            abonent: abonent,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          });
+          
+          await this.abonentRecordRepository.save(entity);
+          savedCount++;
+          this.logger.log(`✅ Загружена и сохранена запись: ${record.id}`);
+          
+        } catch (error) {
+          errorCount++;
+          this.logger.error(`❌ Ошибка при обработке записи ${record.id}: ${error.message}`);
+          this.logErrorDetails(error, record);
+          
+          // Продолжаем с следующей записью
+          continue;
+        }
+      }
+      
+      this.logger.log(`📊 Для пользователя ${userId} загружено и сохранено ${savedCount} новых записей, ошибок: ${errorCount}`);
+      return { savedCount, errorCount, total: records.length };
+      
+    } catch (error) {
+      this.logger.error(`❌ Ошибка при загрузке записей для пользователя ${userId}: ${error.message}`);
+      this.logErrorDetails(error, { userId });
+      
+      // Возвращаем пустой результат при ошибке, но не прерываем весь процесс
+      return { savedCount: 0, errorCount: 1, total: 0 };
     }
-    console.log(`Для пользователя ${userId} загружено и сохранено ${savedCount} новых записей`);
   }
 } 
