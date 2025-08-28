@@ -1,0 +1,57 @@
+export interface ManagerStat {
+  id: number;
+  name: string;
+  department: string;
+  totalCalls: number;
+  averageScore: number;
+  totalDuration: number;
+  trend: 'up' | 'down' | 'stable';
+  lastCallDate: Date;
+  successRate: number;
+}
+
+export interface CallData {
+  date: string;
+  totalCalls: number;
+  averageScore: number;
+  totalDuration: number;
+  successRate: number;
+}
+
+export interface DepartmentStat {
+  name: string;
+  totalCalls: number;
+  averageScore: number;
+  totalDuration: number;
+  managerCount: number;
+  topManager: string;
+  trend: 'up' | 'down' | 'stable';
+}
+
+export interface CallRecord {
+  id: number;
+  managerName: string;
+  clientPhone: string;
+  duration: number;
+  score: number;
+  date: Date;
+  department: string;
+  analysis: {
+    quality: number;
+    sales: number;
+    recommendations: string[];
+  };
+}
+
+export interface DashboardStats {
+  managerStats: ManagerStat[];
+  callAnalytics: CallData[];
+  departmentStats: DepartmentStat[];
+  recentCalls: CallRecord[];
+  summary: {
+    totalCalls: number;
+    averageScore: number;
+    totalDuration: number;
+    activeManagers: number;
+  };
+}

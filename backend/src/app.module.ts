@@ -15,6 +15,7 @@ import { DatabaseModule } from './database/database.module';
 import { CronJobsModule } from './cron-jobs/cron-jobs.module';
 import { AiDeepseekModule } from './ai_deepseek/ai_deepseek.module';
 import { GoogleSheetsModule } from './google-sheets/google-sheets.module';
+import { DashboardModule } from './dashboard/dashboard.module';
 
 @Module({
 	imports: [
@@ -33,6 +34,7 @@ import { GoogleSheetsModule } from './google-sheets/google-sheets.module';
 		CronJobsModule,
 		AiDeepseekModule,
 		GoogleSheetsModule,
+		DashboardModule,
 		// ManagersModule,
 		// ClientsModule,
 		// BeelineApiCallModule,
