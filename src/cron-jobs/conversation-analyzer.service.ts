@@ -54,13 +54,13 @@ export class ConversationAnalyzerService extends BaseCronService implements OnAp
 		this.logger.log('ConversationAnalyzerService инициализирован. Первый запуск анализа разговоров через 3 минуты.');
 		
 		// Запускаем анализ разговоров через 3 минуты после старта приложения
-		// setTimeout(async () => {
-		// 	this.logger.log('Запуск первичного анализа разговоров (через 3 минуты после старта)...');
-		// 	// Устанавливаем флаг в false ПЕРЕД вызовом processAnalysis
-		// 	this.isProcessing = false;
-		// 	this.lastStartTime = null;
-		// 	await this.processAnalysis();
-		// }, 3000); // 180000 мс = 3 минуты
+		setTimeout(async () => {
+			this.logger.log('Запуск первичного анализа разговоров (через 3 минуты после старта)...');
+			// Устанавливаем флаг в false ПЕРЕД вызовом processAnalysis
+			this.isProcessing = false;
+			this.lastStartTime = null;
+			await this.processAnalysis();
+		}, 3000); // 180000 мс = 3 минуты
 	}
 
 	// Запускаем анализ в 21.30
@@ -396,6 +396,18 @@ export class ConversationAnalyzerService extends BaseCronService implements OnAp
 					return; // Выходим без ошибки, чтобы не прерывать обработку очереди
 				}
 				
+				// Проверяем ошибки парсинга JSON (SyntaxError)
+				if (error instanceof SyntaxError || error.name === 'SyntaxError') {
+					this.logger.error(`❌ Ошибка парсинга JSON для записи ${record.beelineId}: ${error.message}`);
+					this.logger.error(`🔍 Тип ошибки: ${error.name}`);
+					this.logger.error(`📝 Запись НЕ будет помечена как проанализированная и будет пропущена.`);
+					
+					// НЕ помечаем запись как проанализированную
+					// НЕ создаем JSON файл
+					// Просто переходим к следующей записи
+					return; // Выходим без ошибки
+				}
+				
 				// Проверяем сетевые ошибки
 				if (this.isNetworkError(error)) {
 					this.logger.error(`🌐 Сетевая ошибка для записи ${record.beelineId}: ${error.message}`);
@@ -428,6 +440,13 @@ export class ConversationAnalyzerService extends BaseCronService implements OnAp
 						// Проверяем, является ли повторная ошибка тоже неполным JSON или сетевой
 						if ((retryError as any).isIncompleteJson || this.isNetworkError(retryError)) {
 							this.logger.error(`❌ Повторная ошибка для записи ${record.beelineId}. Запись пропущена.`);
+							return; // Выходим без ошибки
+						}
+						
+						// Проверяем повторные ошибки парсинга JSON
+						if (retryError instanceof SyntaxError || retryError.name === 'SyntaxError') {
+							this.logger.error(`❌ Повторная ошибка парсинга JSON для записи ${record.beelineId}: ${retryError.message}`);
+							this.logger.error(`📝 Запись пропущена.`);
 							return; // Выходим без ошибки
 						}
 						
@@ -464,6 +483,16 @@ export class ConversationAnalyzerService extends BaseCronService implements OnAp
 
 		} catch (error) {
 			this.logger.error(`❌ Ошибка при обработке записи ${record.beelineId} через очередь: ${error.message}`);
+			
+			// Проверяем, является ли это ошибкой парсинга JSON
+			if (error instanceof SyntaxError || error.name === 'SyntaxError') {
+				this.logger.error(`🔍 Обнаружена ошибка парсинга JSON: ${error.name}`);
+				this.logger.error(`📝 Запись ${record.beelineId} будет пропущена и не помечена как проанализированная.`);
+				
+				// НЕ выбрасываем ошибку, чтобы не прерывать обработку очереди
+				// Просто логируем и продолжаем работу
+				return;
+			}
 			
 			// Анализируем тип ошибки
 			this.logErrorDetails(error, record);
@@ -502,8 +531,8 @@ export class ConversationAnalyzerService extends BaseCronService implements OnAp
 		this.logger.warn(`API ошибка (${this.consecutiveErrors}/${this.maxConsecutiveErrors}): ${error.message}`);
 		this.logger.warn(`Статус ошибки: ${error.status}, Тип: ${error.type || 'неизвестно'}, Код: ${error.code || 'неизвестно'}`);
 		
-		// Для неполных JSON и сетевых ошибок не включаем адаптивный режим
-		if (!(error as any).isIncompleteJson && !this.isNetworkError(error)) {
+		// Для неполных JSON, сетевых ошибок и ошибок парсинга не включаем адаптивный режим
+		if (!(error as any).isIncompleteJson && !this.isNetworkError(error) && !(error instanceof SyntaxError) && error.name !== 'SyntaxError') {
 			// Если получили 429, 500 или много ошибок подряд, включаем адаптивный режим
 			if (error.status === 429 || error.status === 500 || this.consecutiveErrors >= this.maxConsecutiveErrors) {
 				this.enableAdaptiveMode();

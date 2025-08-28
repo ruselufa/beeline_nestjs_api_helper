@@ -74,7 +74,8 @@ export class AiDeepseekService implements OnModuleDestroy {
 			'bad unicode escape',
 			'duplicate key',
 			'number too big',
-			'number too small'
+			'number too small',
+			'unexpected non-whitespace character after json' // Добавляем эту ошибку
 		];
 		
 		// Проверяем на ошибки парсинга
@@ -179,30 +180,221 @@ export class AiDeepseekService implements OnModuleDestroy {
 			} catch (parseError) {
 				// Проверяем, является ли это ошибкой неполного JSON
 				if (this.isIncompleteJsonError(parseError, jsonString)) {
-					this.logger.error(`❌ Получен неполный/некорректный JSON ответ от DeepSeek для записи ${recordId}`);
-					this.logger.error(`🔍 Тип ошибки: ${parseError.message}`);
-					this.logger.error(`📏 Размер ответа: ${analysisResult.length} символов`);
-					this.logger.error(`📏 Размер JSON: ${jsonString.length} символов`);
-					this.logger.error(`📍 Позиция ошибки: ${parseError.message.match(/position (\d+)/)?.[1] || 'неизвестно'}`);
-					
-					// Показываем контекст вокруг ошибки
-					const position = parseInt(parseError.message.match(/position (\d+)/)?.[1] || '0');
-					if (position > 0) {
-						const start = Math.max(0, position - 100);
-						const end = Math.min(jsonString.length, position + 100);
-						this.logger.error(`🔍 Контекст ошибки (позиция ${position}):`);
-						this.logger.error(`   ...${jsonString.slice(start, position)}[ОШИБКА]${jsonString.slice(position, end)}...`);
+					// Попробуем исправить JSON, удалив лишние символы после него
+					if (parseError.message.includes('Unexpected non-whitespace character after JSON')) {
+						try {
+							// Ищем позицию, где заканчивается валидный JSON
+							const position = parseInt(parseError.message.match(/position (\d+)/)?.[1] || '0');
+							if (position > 0) {
+								const cleanJson = jsonString.substring(0, position).trim();
+								// Проверяем, что получившийся JSON валиден
+								const testParse = JSON.parse(cleanJson);
+								if (testParse.table && testParse.table.blocks) {
+									this.logger.warn(`🔧 Исправлен JSON с лишними символами для записи ${recordId}`);
+									parsedResult = testParse;
+									// Продолжаем выполнение вместо выброса ошибки
+								} else {
+									// JSON неполный, выбрасываем ошибку
+									this.logger.error(`❌ Получен неполный/некорректный JSON ответ от DeepSeek для записи ${recordId}`);
+									this.logger.error(`🔍 Тип ошибки: ${parseError.message}`);
+									this.logger.error(`📏 Размер ответа: ${analysisResult.length} символов`);
+									this.logger.error(`📏 Размер JSON: ${jsonString.length} символов}`);
+									this.logger.error(`📍 Позиция ошибки: ${parseError.message.match(/position (\d+)/)?.[1] || 'неизвестно'}`);
+									
+									// Показываем контекст вокруг ошибки
+									const position = parseInt(parseError.message.match(/position (\d+)/)?.[1] || '0');
+									if (position > 0) {
+										const start = Math.max(0, position - 100);
+										const end = Math.min(jsonString.length, position + 100);
+										this.logger.error(`🔍 Контекст ошибки (позиция ${position}):`);
+										this.logger.error(`   ...${jsonString.slice(start, position)}[ОШИБКА]${jsonString.slice(position, end)}...`);
+									}
+									
+									// Создаем специальную ошибку для неполного JSON
+									const incompleteError = new Error(`Неполный/некорректный JSON ответ от DeepSeek: ${parseError.message}`);
+									incompleteError.name = 'IncompleteJsonError';
+									(incompleteError as any).isIncompleteJson = true;
+									(incompleteError as any).originalError = parseError;
+									(incompleteError as any).jsonString = jsonString;
+									(incompleteError as any).errorPosition = position;
+									
+									throw incompleteError;
+								}
+							} else {
+								// Не удалось определить позицию, выбрасываем ошибку
+								this.logger.error(`❌ Получен неполный/некорректный JSON ответ от DeepSeek для записи ${recordId}`);
+								this.logger.error(`🔍 Тип ошибки: ${parseError.message}`);
+								this.logger.error(`📏 Размер ответа: ${analysisResult.length} символов`);
+								this.logger.error(`📏 Размер JSON: ${jsonString.length} символов`);
+								
+								// Создаем специальную ошибку для неполного JSON
+								const incompleteError = new Error(`Неполный/некорректный JSON ответ от DeepSeek: ${parseError.message}`);
+								incompleteError.name = 'IncompleteJsonError';
+								(incompleteError as any).isIncompleteJson = true;
+								(incompleteError as any).originalError = parseError;
+								(incompleteError as any).jsonString = jsonString;
+								
+								throw incompleteError;
+							}
+						} catch (fixError) {
+							// Если не удалось исправить, выбрасываем оригинальную ошибку
+							this.logger.error(`❌ Получен неполный/некорректный JSON ответ от DeepSeek для записи ${recordId}`);
+							this.logger.error(`🔍 Тип ошибки: ${parseError.message}`);
+							this.logger.error(`📏 Размер ответа: ${analysisResult.length} символов`);
+							this.logger.error(`📏 Размер JSON: ${jsonString.length} символов`);
+							this.logger.error(`📍 Позиция ошибки: ${parseError.message.match(/position (\d+)/)?.[1] || 'неизвестно'}`);
+							
+							// Показываем контекст вокруг ошибки
+							const position = parseInt(parseError.message.match(/position (\d+)/)?.[1] || '0');
+							if (position > 0) {
+								const start = Math.max(0, position - 100);
+								const end = Math.min(jsonString.length, position + 100);
+								this.logger.error(`🔍 Контекст ошибки (позиция ${position}):`);
+								this.logger.error(`   ...${jsonString.slice(start, position)}[ОШИБКА]${jsonString.slice(position, end)}...`);
+							}
+							
+							// Создаем специальную ошибку для неполного JSON
+							const incompleteError = new Error(`Неполный/некорректный JSON ответ от DeepSeek: ${parseError.message}`);
+							incompleteError.name = 'IncompleteJsonError';
+							(incompleteError as any).isIncompleteJson = true;
+							(incompleteError as any).originalError = parseError;
+							(incompleteError as any).jsonString = jsonString;
+							(incompleteError as any).errorPosition = position;
+							
+							throw incompleteError;
+						}
+					} else {
+						// Для других типов неполного JSON - попробуем исправить незакрытые элементы
+						try {
+							let fixedJson = jsonString;
+							
+							// Исправляем незакрытые кавычки
+							const quoteCount = (jsonString.match(/"/g) || []).length;
+							if (quoteCount % 2 !== 0) {
+								// Удаляем последнюю незакрытую кавычку
+								const lastQuoteIndex = jsonString.lastIndexOf('"');
+								if (lastQuoteIndex > 0) {
+									fixedJson = jsonString.substring(0, lastQuoteIndex);
+								}
+							}
+							
+							// Исправляем незакрытые скобки
+							const openBraces = (fixedJson.match(/\{/g) || []).length;
+							const closeBraces = (fixedJson.match(/\}/g) || []).length;
+							if (openBraces > closeBraces) {
+								// Добавляем недостающие закрывающие скобки
+								fixedJson += '}'.repeat(openBraces - closeBraces);
+							}
+							
+							// Исправляем незакрытые квадратные скобки
+							const openBrackets = (fixedJson.match(/\[/g) || []).length;
+							const closeBrackets = (fixedJson.match(/\]/g) || []).length;
+							if (openBrackets > closeBrackets) {
+								// Добавляем недостающие закрывающие скобки
+								fixedJson += ']'.repeat(openBrackets - closeBrackets);
+							}
+							
+							// Пробуем распарсить исправленный JSON
+							const testParse = JSON.parse(fixedJson);
+							if (testParse.table && testParse.table.blocks) {
+								this.logger.warn(`🔧 Исправлен JSON с незакрытыми элементами для записи ${recordId}`);
+								parsedResult = testParse;
+								// Продолжаем выполнение вместо выброса ошибки
+							} else {
+								throw new Error('Исправленный JSON не содержит необходимую структуру');
+							}
+							
+						} catch (fixError) {
+							// Попробуем еще один способ исправления - найти последний валидный JSON объект
+							try {
+								// Ищем последний полный JSON объект
+								const jsonObjects = [];
+								let braceCount = 0;
+								let bracketCount = 0;
+								let inString = false;
+								let escapeNext = false;
+								let currentObject = '';
+								
+								for (let i = 0; i < jsonString.length; i++) {
+									const char = jsonString[i];
+									
+									if (escapeNext) {
+										currentObject += char;
+										escapeNext = false;
+										continue;
+									}
+									
+									if (char === '\\') {
+										escapeNext = true;
+										currentObject += char;
+										continue;
+									}
+									
+									if (char === '"' && !escapeNext) {
+										inString = !inString;
+									}
+									
+									if (!inString) {
+										if (char === '{') braceCount++;
+										if (char === '}') braceCount--;
+										if (char === '[') bracketCount++;
+										if (char === ']') bracketCount--;
+									}
+									
+									currentObject += char;
+									
+									// Если нашли полный объект
+									if (braceCount === 0 && bracketCount === 0 && currentObject.trim()) {
+										try {
+											const testObj = JSON.parse(currentObject.trim());
+											if (testObj.table && testObj.table.blocks) {
+												jsonObjects.push(testObj);
+											}
+										} catch (e) {
+											// Игнорируем ошибки парсинга отдельных объектов
+										}
+									}
+								}
+								
+								// Берем последний валидный объект
+								if (jsonObjects.length > 0) {
+									const lastValidObject = jsonObjects[jsonObjects.length - 1];
+									this.logger.warn(`🔧 Найден валидный JSON объект в ответе для записи ${recordId}`);
+									parsedResult = lastValidObject;
+									// Продолжаем выполнение
+								} else {
+									throw new Error('Не удалось найти валидный JSON объект');
+								}
+								
+							} catch (finalFixError) {
+								// Если не удалось исправить, выбрасываем ошибку
+								this.logger.error(`❌ Получен неполный/некорректный JSON ответ от DeepSeek для записи ${recordId}`);
+								this.logger.error(`🔍 Тип ошибки: ${parseError.message}`);
+								this.logger.error(`📏 Размер ответа: ${analysisResult.length} символов`);
+								this.logger.error(`📏 Размер JSON: ${jsonString.length} символов`);
+								this.logger.error(`📍 Позиция ошибки: ${parseError.message.match(/position (\d+)/)?.[1] || 'неизвестно'}`);
+								
+								// Показываем контекст вокруг ошибки
+								const position = parseInt(parseError.message.match(/position (\d+)/)?.[1] || '0');
+								if (position > 0) {
+									const start = Math.max(0, position - 100);
+									const end = Math.min(jsonString.length, position + 100);
+									this.logger.error(`🔍 Контекст ошибки (позиция ${position}):`);
+									this.logger.error(`   ...${jsonString.slice(start, position)}[ОШИБКА]${jsonString.slice(position, end)}...`);
+								}
+								
+								// Создаем специальную ошибку для неполного JSON
+								const incompleteError = new Error(`Неполный/некорректный JSON ответ от DeepSeek: ${parseError.message}`);
+								incompleteError.name = 'IncompleteJsonError';
+								(incompleteError as any).isIncompleteJson = true;
+								(incompleteError as any).originalError = parseError;
+								(incompleteError as any).jsonString = jsonString;
+								(incompleteError as any).errorPosition = position;
+								
+								throw incompleteError;
+							}
+						}
 					}
-					
-					// Создаем специальную ошибку для неполного JSON
-					const incompleteError = new Error(`Неполный/некорректный JSON ответ от DeepSeek: ${parseError.message}`);
-					incompleteError.name = 'IncompleteJsonError';
-					(incompleteError as any).isIncompleteJson = true;
-					(incompleteError as any).originalError = parseError;
-					(incompleteError as any).jsonString = jsonString;
-					(incompleteError as any).errorPosition = position;
-					
-					throw incompleteError;
 				}
 				
 				this.logger.error(`❌ Не удалось распарсить JSON ответ: ${parseError.message}`);
