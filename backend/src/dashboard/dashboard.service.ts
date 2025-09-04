@@ -34,10 +34,19 @@ export class DashboardService {
 
     // Вычисляем средний балл
     const analyzedRecords = await this.analyzedAiRepository.find();
+    console.log('🔍 AnalyzedAi records count:', analyzedRecords.length);
+    if (analyzedRecords.length > 0) {
+      console.log('🔍 First AnalyzedAi record:', JSON.stringify(analyzedRecords[0].analysisResult, null, 2));
+    }
+    
     const averageScore = analyzedRecords.length > 0 
       ? analyzedRecords.reduce((sum, record) => {
           const analysis = record.analysisResult as any;
-          return sum + (analysis?.overall_score || 0);
+          // Извлекаем total_score из table.blocks[2].headers
+          const totalScoreHeader = analysis?.table?.blocks?.[2]?.headers?.find((h: any) => h.id === 'total_score');
+          const score = totalScoreHeader?.value || 0;
+          console.log('🔍 Score from AnalyzedAi:', score, 'from totalScoreHeader:', totalScoreHeader);
+          return sum + score;
         }, 0) / analyzedRecords.length
       : 0;
 
@@ -82,10 +91,19 @@ export class DashboardService {
       
       // Вычисляем средний балл для менеджера
       const analyzedRecords = records.filter(record => record.deepseek_analysed);
+      console.log(`🔍 Manager ${manager.firstName} ${manager.lastName}: analyzed records:`, analyzedRecords.length);
+      if (analyzedRecords.length > 0) {
+        console.log('🔍 First analyzed record:', JSON.stringify(analyzedRecords[0].deepseek_analysis, null, 2));
+      }
+      
       const averageScore = analyzedRecords.length > 0
         ? analyzedRecords.reduce((sum, record) => {
             const analysis = record.deepseek_analysis as any;
-            return sum + (analysis?.overall_score || 0);
+            // Извлекаем total_score из table.blocks[2].headers
+            const totalScoreHeader = analysis?.table?.blocks?.[2]?.headers?.find((h: any) => h.id === 'total_score');
+            const score = totalScoreHeader?.value || 0;
+            console.log('🔍 Score from AbonentRecord:', score, 'from totalScoreHeader:', totalScoreHeader);
+            return sum + score;
           }, 0) / analyzedRecords.length
         : 0;
 
@@ -129,8 +147,10 @@ export class DashboardService {
       
       if (record.deepseek_analysed && record.deepseek_analysis) {
         const analysis = record.deepseek_analysis as any;
-        if (analysis?.overall_score) {
-          existing.scores.push(analysis.overall_score);
+        const totalScoreHeader = analysis?.table?.blocks?.[2]?.headers?.find((h: any) => h.id === 'total_score');
+        const score = totalScoreHeader?.value;
+        if (score !== undefined) {
+          existing.scores.push(score);
         }
       }
       
@@ -182,8 +202,10 @@ export class DashboardService {
       records.forEach(record => {
         if (record.deepseek_analysed && record.deepseek_analysis) {
           const analysis = record.deepseek_analysis as any;
-          if (analysis?.overall_score) {
-            existing.scores.push(analysis.overall_score);
+          const totalScoreHeader = analysis?.table?.blocks?.[2]?.headers?.find((h: any) => h.id === 'total_score');
+          const score = totalScoreHeader?.value;
+          if (score !== undefined) {
+            existing.scores.push(score);
           }
         }
       });
@@ -226,13 +248,15 @@ export class DashboardService {
 
     return records.map(record => {
       const analysis = record.deepseek_analysis as any;
+      const totalScoreHeader = analysis?.table?.blocks?.[2]?.headers?.find((h: any) => h.id === 'total_score');
+      const score = totalScoreHeader?.value || 0;
       
       return {
         id: record.id,
         managerName: `${record.abonent.firstName} ${record.abonent.lastName}`,
         clientPhone: record.phone || 'Не указан',
         duration: record.duration || 0,
-        score: analysis?.overall_score || 0,
+        score: score,
         date: record.createdAt,
         department: record.abonent.department || 'Не указан',
         analysis: {
