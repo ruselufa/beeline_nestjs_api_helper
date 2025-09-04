@@ -27,12 +27,9 @@ export class DashboardController {
     @Param('id') id: string,
     @Query('limit') limit: string = '50',
   ) {
-    // TODO: Реализовать получение звонков менеджера
-    return { 
-      message: 'Manager calls endpoint - в разработке', 
-      managerId: id, 
-      limit: parseInt(limit) 
-    };
+    const managerId = parseInt(id, 10);
+    const limitNum = parseInt(limit, 10);
+    return this.dashboardService.getManagerCalls(managerId, limitNum);
   }
 
   @Get('departments/:name/calls')

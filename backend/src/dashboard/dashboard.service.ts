@@ -229,25 +229,27 @@ export class DashboardService {
       departmentMap.set(dept, existing);
     });
 
-    return Array.from(departmentMap.entries()).map(([name, stats]) => {
-      const averageScore = stats.scores.length > 0
-        ? Math.round(stats.scores.reduce((sum, score) => sum + score, 0) / stats.scores.length * 10) / 10
-        : 0;
+    return Array.from(departmentMap.entries())
+      .map(([name, stats]) => {
+        const averageScore = stats.scores.length > 0
+          ? Math.round(stats.scores.reduce((sum, score) => sum + score, 0) / stats.scores.length * 10) / 10
+          : 0;
 
-      // Находим лучшего менеджера в отделе
-      const topManager = stats.managers[0] || 'Не указан';
+        // Находим лучшего менеджера в отделе
+        const topManager = stats.managers[0] || 'Не указан';
 
-      return {
-        name,
-        totalCalls: stats.totalCalls,
-        averageScore,
-        totalDuration: stats.totalDuration,
-        managerCount: stats.managerCount,
-        topManager,
-        trend: 'stable', // Упрощенно
-      };
-    })
-    .sort((a, b) => b.averageScore - a.averageScore);
+        return {
+          name,
+          totalCalls: stats.totalCalls,
+          averageScore,
+          totalDuration: stats.totalDuration,
+          managerCount: stats.managerCount,
+          topManager,
+          trend: 'stable', // Упрощенно
+        };
+      })
+      .filter(dept => !this.EXCLUDED_DEPARTMENTS.includes(dept.name)) // Исключаем отделы
+      .sort((a, b) => b.averageScore - a.averageScore);
   }
 
   /**
@@ -394,26 +396,73 @@ export class DashboardService {
       take: 20,
     });
 
-    return records.map(record => {
-      const analysis = record.deepseek_analysis as any;
-      const totalScoreHeader = analysis?.table?.blocks?.[2]?.headers?.find((h: any) => h.id === 'total_score');
-      const score = totalScoreHeader?.value || 0;
-      
-      return {
-        id: record.id,
-        managerName: `${record.abonent.firstName} ${record.abonent.lastName}`,
-        clientPhone: record.phone || 'Не указан',
-        duration: record.duration || 0,
-        score: score,
-        date: record.createdAt,
-        department: record.abonent.department || 'Не указан',
-        analysis: {
-          quality: analysis?.quality_score || 0,
-          sales: analysis?.sales_score || 0,
-          recommendations: analysis?.recommendations || [],
-        },
-      };
+    return records
+      .map(record => {
+        const analysis = record.deepseek_analysis as any;
+        const totalScoreHeader = analysis?.table?.blocks?.[2]?.headers?.find((h: any) => h.id === 'total_score');
+        const score = totalScoreHeader?.value || 0;
+        
+        return {
+          id: record.id,
+          managerId: record.abonent.id,
+          managerName: `${record.abonent.firstName} ${record.abonent.lastName}`,
+          clientPhone: record.phone || 'Не указан',
+          duration: record.duration || 0,
+          score: score,
+          date: record.createdAt,
+          department: record.abonent.department || 'Не указан',
+          analysis: {
+            quality: analysis?.quality_score || 0,
+            sales: analysis?.sales_score || 0,
+            recommendations: analysis?.recommendations || [],
+          },
+        };
+      })
+      .filter(call => call.score > 0); // Только проанализированные звонки с баллом > 0
+  }
+
+  /**
+   * Получить все проанализированные звонки конкретного менеджера
+   */
+  async getManagerCalls(managerId: number, limit: number = 50) {
+    const records = await this.recordRepository.find({
+      where: {
+        deepseek_analysed: true,
+        abonent: { id: managerId },
+      },
+      relations: ['abonent'],
+      order: {
+        createdAt: 'DESC',
+      },
+      take: limit,
     });
+
+    return records
+      .map(record => {
+        const analysis = record.deepseek_analysis as any;
+        const totalScoreHeader = analysis?.table?.blocks?.[2]?.headers?.find((h: any) => h.id === 'total_score');
+        const score = totalScoreHeader?.value || 0;
+        
+        return {
+          id: record.id,
+          beelineId: record.beelineId,
+          beelineExternalId: record.beelineExternalId,
+          callId: record.callId,
+          phone: record.phone,
+          direction: record.direction,
+          date: record.date,
+          createdAt: record.createdAt,
+          duration: record.duration,
+          fileSize: record.fileSize,
+          comment: record.comment,
+          score: score,
+          managerName: `${record.abonent.firstName} ${record.abonent.lastName}`,
+          department: record.abonent.department || 'Не указан',
+          // Полный JSON анализа
+          deepseekAnalysis: record.deepseek_analysis,
+        };
+      })
+      .filter(call => call.score > 0); // Только проанализированные звонки с баллом > 0
   }
 
   private calculateTrend(records: AbonentRecord[]): 'up' | 'down' | 'stable' {

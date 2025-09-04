@@ -97,6 +97,7 @@ export const mockDashboardStats: DashboardStats = {
   recentCalls: [
     {
       id: 1,
+      managerId: 1,
       managerName: 'Иван Петров',
       clientPhone: '+7 (999) 123-45-67',
       duration: 180000,
@@ -111,6 +112,7 @@ export const mockDashboardStats: DashboardStats = {
     },
     {
       id: 2,
+      managerId: 2,
       managerName: 'Мария Сидорова',
       clientPhone: '+7 (999) 234-56-78',
       duration: 240000,
@@ -125,6 +127,7 @@ export const mockDashboardStats: DashboardStats = {
     },
     {
       id: 3,
+      managerId: 3,
       managerName: 'Алексей Козлов',
       clientPhone: '+7 (999) 345-67-89',
       duration: 150000,

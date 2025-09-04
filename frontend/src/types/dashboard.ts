@@ -30,6 +30,7 @@ export interface DepartmentStat {
 
 export interface CallRecord {
   id: number;
+  managerId: number;
   managerName: string;
   clientPhone: string;
   duration: number;
@@ -89,4 +90,23 @@ export interface DepartmentOverview {
 export interface DateRange {
   start: string;
   end: string;
+}
+
+// Детальная информация о звонке менеджера
+export interface ManagerCallRecord {
+  id: number;
+  beelineId: string;
+  beelineExternalId: string;
+  callId: string;
+  phone: string;
+  direction: string;
+  date: Date;
+  createdAt: Date;
+  duration: number;
+  fileSize: number;
+  comment: string;
+  score: number;
+  managerName: string;
+  department: string;
+  deepseekAnalysis: any; // Полный JSON анализа
 }

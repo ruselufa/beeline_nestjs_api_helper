@@ -1,4 +1,5 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 import { Phone, Clock, Star, User, Calendar } from 'lucide-react';
 import { CallRecord } from '../../types/dashboard';
 
@@ -42,7 +43,7 @@ export const RecentCalls: React.FC<RecentCallsProps> = ({ calls }) => {
   return (
     <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
       <h2 className="text-xl font-semibold text-gray-900 mb-4">
-        Последние звонки
+        Последние проанализированные звонки
       </h2>
       
       <div className="space-y-3">
@@ -59,9 +60,12 @@ export const RecentCalls: React.FC<RecentCallsProps> = ({ calls }) => {
                 <div className="flex items-center space-x-3">
                   <div className="flex items-center space-x-2">
                     <User className="h-4 w-4 text-gray-400" />
-                    <span className="font-medium text-gray-900">
+                    <Link 
+                      to={`/manager/${call.managerId}`}
+                      className="font-medium text-gray-900 hover:text-blue-600 transition-colors duration-200"
+                    >
                       {call.managerName}
-                    </span>
+                    </Link>
                   </div>
                   <span className="text-gray-400">•</span>
                   <span className="text-sm text-gray-600">

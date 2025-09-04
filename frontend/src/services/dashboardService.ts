@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { DashboardStats, ManagerStat, DepartmentStat, DepartmentsOverview, DepartmentOverview, DateRange } from '../types/dashboard';
+import { DashboardStats, ManagerStat, DepartmentStat, DepartmentsOverview, DepartmentOverview, DateRange, ManagerCallRecord } from '../types/dashboard';
 import { mockDashboardStats, mockManagerStats, mockDepartmentStats } from './mockData';
 
 // const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
@@ -80,29 +80,6 @@ export const dashboardService = {
         throw new Error(`Department ${department} not found`);
       }
       return mockData;
-    }
-  },
-
-  async getManagerCalls(managerId: number, limit: number = 50): Promise<any[]> {
-    if (USE_MOCK_DATA) {
-      await simulateApiDelay();
-      // Возвращаем подмножество звонков для конкретного менеджера
-      return mockDashboardStats.recentCalls
-        .filter(call => call.managerName === mockManagerStats[managerId]?.name)
-        .slice(0, limit);
-    }
-    
-    try {
-      const response = await api.get(`/managers/${managerId}/calls`, {
-        params: { limit }
-      });
-      return response.data;
-    } catch (error) {
-      console.error('API Error, falling back to mock data:', error);
-      await simulateApiDelay();
-      return mockDashboardStats.recentCalls
-        .filter(call => call.managerName === mockManagerStats[managerId]?.name)
-        .slice(0, limit);
     }
   },
 
@@ -234,6 +211,110 @@ export const dashboardService = {
           { id: 3, name: 'Сидоров Сидор', totalCalls: 96, totalDuration: 38000, averageScore: 4.5 },
         ]
       };
+    }
+  },
+
+  // Получить звонки менеджера
+  async getManagerCalls(managerId: number, limit: number = 50): Promise<ManagerCallRecord[]> {
+    if (USE_MOCK_DATA) {
+      await simulateApiDelay();
+      // Mock данные для звонков менеджера
+      return [
+        {
+          id: 1,
+          beelineId: 'BL001',
+          beelineExternalId: 'EXT001',
+          callId: 'CALL001',
+          phone: '9123456789',
+          direction: 'OUTBOUND',
+          date: new Date('2025-09-04T10:30:00'),
+          createdAt: new Date('2025-09-04T10:35:00'),
+          duration: 450000,
+          fileSize: 2048000,
+          comment: 'Консультация по тарифам',
+          score: 4.2,
+          managerName: 'Иванов Иван',
+          department: 'Команда Сергеевцы',
+          deepseekAnalysis: {
+            table: {
+              blocks: [
+                {
+                  headers: [
+                    { id: 'client_name', value: 'Мария' },
+                    { id: 'call_purpose', value: 'Консультация по тарифам' }
+                  ]
+                },
+                {
+                  headers: [
+                    { id: 'greeting_score', value: 1 },
+                    { id: 'needs_score', value: 2 },
+                    { id: 'presentation_score', value: 1.5 }
+                  ]
+                },
+                {
+                  headers: [
+                    { id: 'total_score', value: 4.2 },
+                    { id: 'recommendations', value: ['Лучше выявлять потребности'] }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ].slice(0, limit);
+    }
+
+    try {
+      const response = await api.get(`/dashboard/managers/${managerId}/calls`, {
+        params: { limit }
+      });
+      return response.data;
+    } catch (error) {
+      console.error('API Error, falling back to mock data:', error);
+      await simulateApiDelay();
+      return [
+        {
+          id: 1,
+          beelineId: 'BL001',
+          beelineExternalId: 'EXT001',
+          callId: 'CALL001',
+          phone: '9123456789',
+          direction: 'OUTBOUND',
+          date: new Date('2025-09-04T10:30:00'),
+          createdAt: new Date('2025-09-04T10:35:00'),
+          duration: 450000,
+          fileSize: 2048000,
+          comment: 'Консультация по тарифам',
+          score: 4.2,
+          managerName: 'Иванов Иван',
+          department: 'Команда Сергеевцы',
+          deepseekAnalysis: {
+            table: {
+              blocks: [
+                {
+                  headers: [
+                    { id: 'client_name', value: 'Мария' },
+                    { id: 'call_purpose', value: 'Консультация по тарифам' }
+                  ]
+                },
+                {
+                  headers: [
+                    { id: 'greeting_score', value: 1 },
+                    { id: 'needs_score', value: 2 },
+                    { id: 'presentation_score', value: 1.5 }
+                  ]
+                },
+                {
+                  headers: [
+                    { id: 'total_score', value: 4.2 },
+                    { id: 'recommendations', value: ['Лучше выявлять потребности'] }
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ].slice(0, limit);
     }
   }
 };

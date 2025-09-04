@@ -151,9 +151,12 @@ export const DepartmentDetail: React.FC = () => {
                         
                         {/* Имя менеджера */}
                         <div>
-                          <h4 className="font-medium text-gray-900">
+                          <Link 
+                            to={`/manager/${manager.id}`}
+                            className="font-medium text-gray-900 hover:text-blue-600 transition-colors duration-200"
+                          >
                             {manager.name}
-                          </h4>
+                          </Link>
                         </div>
                       </div>
                       
