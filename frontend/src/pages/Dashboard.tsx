@@ -5,6 +5,7 @@ import { SummaryCards } from '../components/dashboard/SummaryCards';
 import { ManagerStats } from '../components/dashboard/ManagerStats';
 import { CallAnalytics } from '../components/dashboard/CallAnalytics';
 import { DepartmentOverview } from '../components/dashboard/DepartmentOverview';
+import { DepartmentsOverview } from '../components/dashboard/DepartmentsOverview';
 import { RecentCalls } from '../components/dashboard/RecentCalls';
 
 export const Dashboard: React.FC = () => {
@@ -56,6 +57,9 @@ export const Dashboard: React.FC = () => {
         <CallAnalytics data={stats?.callAnalytics} />
         <DepartmentOverview data={stats?.departmentStats} />
       </div>
+      
+      {/* Обзор по отделам с графиками */}
+      <DepartmentsOverview />
       
       {/* Последние звонки */}
       <RecentCalls calls={stats?.recentCalls} />

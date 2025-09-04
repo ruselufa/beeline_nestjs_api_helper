@@ -16,6 +16,17 @@ export class DashboardService {
     private analyzedAiRepository: Repository<AnalyzedAi>,
   ) {}
 
+  /**
+   * Список отделов, которые нужно исключать из менеджерских метрик и обзорных графиков
+   */
+  private readonly EXCLUDED_DEPARTMENTS: string[] = [
+    'Отдел Качества',
+    'Отдел Продукта',
+    'Остальные',
+    'Уволенные рабочие',
+    'Заблокированные',
+  ];
+
   async getDashboardStats() {
     const now = new Date();
     const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
@@ -84,7 +95,9 @@ export class DashboardService {
       relations: ['abonentRecords'],
     });
 
-    return managers.map(manager => {
+    return managers
+      .filter(manager => !this.EXCLUDED_DEPARTMENTS.includes(manager.department))
+      .map(manager => {
       const records = manager.abonentRecords || [];
       const totalCalls = records.length;
       const totalDuration = records.reduce((sum, record) => sum + (record.duration || 0), 0);
@@ -184,6 +197,9 @@ export class DashboardService {
 
     managers.forEach(manager => {
       const dept = manager.department || 'Не указан';
+      if (this.EXCLUDED_DEPARTMENTS.includes(dept)) {
+        return;
+      }
       const existing = departmentMap.get(dept) || {
         totalCalls: 0,
         totalDuration: 0,
@@ -232,6 +248,138 @@ export class DashboardService {
       };
     })
     .sort((a, b) => b.averageScore - a.averageScore);
+  }
+
+  /**
+   * Обзор по всем оставшимся отделам за период (по дням)
+   */
+  async getDepartmentsOverview(startDate: Date, endDate: Date) {
+    const records = await this.recordRepository.find({
+      where: {
+        createdAt: Between(startDate, endDate),
+      },
+      relations: ['abonent'],
+    });
+
+    const filtered = records.filter(r => !this.EXCLUDED_DEPARTMENTS.includes(r.abonent?.department));
+
+    const daily = new Map<string, { calls: number; duration: number; scores: number[] }>();
+    for (const rec of filtered) {
+      const date = rec.createdAt.toISOString().split('T')[0];
+      const agg = daily.get(date) || { calls: 0, duration: 0, scores: [] };
+      agg.calls += 1;
+      agg.duration += rec.duration || 0;
+      if (rec.deepseek_analysed && rec.deepseek_analysis) {
+        const analysis = rec.deepseek_analysis as any;
+        const totalScoreHeader = analysis?.table?.blocks?.[2]?.headers?.find((h: any) => h.id === 'total_score');
+        const score = totalScoreHeader?.value;
+        if (score !== undefined) agg.scores.push(score);
+      }
+      daily.set(date, agg);
+    }
+
+    const dailySeries = Array.from(daily.entries())
+      .map(([date, d]) => ({
+        date,
+        totalCalls: d.calls,
+        totalDuration: d.duration,
+        averageScore: d.scores.length > 0 ? Math.round((d.scores.reduce((s, v) => s + v, 0) / d.scores.length) * 10) / 10 : 0,
+      }))
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+    const totals = dailySeries.reduce(
+      (acc, d) => {
+        acc.totalCalls += d.totalCalls;
+        acc.totalDuration += d.totalDuration;
+        acc._scoreSum += d.averageScore;
+        acc._scoreDays += d.averageScore > 0 ? 1 : 0;
+        return acc;
+      },
+      { totalCalls: 0, totalDuration: 0, _scoreSum: 0, _scoreDays: 0 },
+    );
+
+    const averageScore = totals._scoreDays > 0 ? Math.round((totals._scoreSum / totals._scoreDays) * 10) / 10 : 0;
+
+    return {
+      period: { start: startDate.toISOString(), end: endDate.toISOString() },
+      metrics: { totalCalls: totals.totalCalls, totalDuration: totals.totalDuration, averageScore },
+      daily: dailySeries,
+    };
+  }
+
+  /**
+   * Обзор по конкретному отделу за период (по дням) + агрегаты по менеджерам
+   */
+  async getDepartmentOverview(department: string, startDate: Date, endDate: Date) {
+    const records = await this.recordRepository.find({
+      where: {
+        createdAt: Between(startDate, endDate),
+      },
+      relations: ['abonent'],
+    });
+
+    const filtered = records.filter(r => r.abonent?.department === department);
+
+    const daily = new Map<string, { calls: number; duration: number; scores: number[] }>();
+    const managerAgg = new Map<number, { name: string; calls: number; duration: number; scores: number[] }>();
+
+    for (const rec of filtered) {
+      const date = rec.createdAt.toISOString().split('T')[0];
+      const agg = daily.get(date) || { calls: 0, duration: 0, scores: [] };
+      agg.calls += 1;
+      agg.duration += rec.duration || 0;
+      if (rec.deepseek_analysed && rec.deepseek_analysis) {
+        const analysis = rec.deepseek_analysis as any;
+        const totalScoreHeader = analysis?.table?.blocks?.[2]?.headers?.find((h: any) => h.id === 'total_score');
+        const score = totalScoreHeader?.value;
+        if (score !== undefined) agg.scores.push(score);
+      }
+      daily.set(date, agg);
+
+      // per manager aggregate
+      const managerId = rec.abonent?.id;
+      if (managerId) {
+        const current = managerAgg.get(managerId) || {
+          name: `${rec.abonent.firstName} ${rec.abonent.lastName}`,
+          calls: 0,
+          duration: 0,
+          scores: [],
+        };
+        current.calls += 1;
+        current.duration += rec.duration || 0;
+        if (rec.deepseek_analysed && rec.deepseek_analysis) {
+          const analysis = rec.deepseek_analysis as any;
+          const totalScoreHeader = analysis?.table?.blocks?.[2]?.headers?.find((h: any) => h.id === 'total_score');
+          const score = totalScoreHeader?.value;
+          if (score !== undefined) current.scores.push(score);
+        }
+        managerAgg.set(managerId, current);
+      }
+    }
+
+    const dailySeries = Array.from(daily.entries())
+      .map(([date, d]) => ({
+        date,
+        totalCalls: d.calls,
+        totalDuration: d.duration,
+        averageScore: d.scores.length > 0 ? Math.round((d.scores.reduce((s, v) => s + v, 0) / d.scores.length) * 10) / 10 : 0,
+      }))
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+    const managers = Array.from(managerAgg.entries()).map(([id, m]) => ({
+      id,
+      name: m.name,
+      totalCalls: m.calls,
+      totalDuration: m.duration,
+      averageScore: m.scores.length > 0 ? Math.round((m.scores.reduce((s, v) => s + v, 0) / m.scores.length) * 10) / 10 : 0,
+    }));
+
+    return {
+      department,
+      period: { start: startDate.toISOString(), end: endDate.toISOString() },
+      daily: dailySeries,
+      managers,
+    };
   }
 
   private async getRecentCalls() {

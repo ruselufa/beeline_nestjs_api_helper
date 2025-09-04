@@ -55,3 +55,38 @@ export interface DashboardStats {
     activeManagers: number;
   };
 }
+
+// Новые типы для обзора по отделам
+export interface DepartmentsOverview {
+  period: {
+    start: string;
+    end: string;
+  };
+  metrics: {
+    totalCalls: number;
+    totalDuration: number;
+    averageScore: number;
+  };
+  daily: CallData[];
+}
+
+export interface DepartmentOverview {
+  department: string;
+  period: {
+    start: string;
+    end: string;
+  };
+  daily: CallData[];
+  managers: {
+    id: number;
+    name: string;
+    totalCalls: number;
+    totalDuration: number;
+    averageScore: number;
+  }[];
+}
+
+export interface DateRange {
+  start: string;
+  end: string;
+}

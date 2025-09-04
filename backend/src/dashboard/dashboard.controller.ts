@@ -47,4 +47,27 @@ export class DashboardController {
       limit: parseInt(limit) 
     };
   }
+
+  // Новый: обзор по всем отделам за период (по дням)
+  @Get('departments/overview')
+  async getDepartmentsOverview(
+    @Query('start') start?: string,
+    @Query('end') end?: string,
+  ) {
+    const endDate = end ? new Date(end) : new Date();
+    const startDate = start ? new Date(start) : new Date(endDate.getTime() - 7 * 24 * 60 * 60 * 1000);
+    return this.dashboardService.getDepartmentsOverview(startDate, endDate);
+  }
+
+  // Новый: обзор по конкретному отделу за период
+  @Get('departments/:name/overview')
+  async getDepartmentOverview(
+    @Param('name') name: string,
+    @Query('start') start?: string,
+    @Query('end') end?: string,
+  ) {
+    const endDate = end ? new Date(end) : new Date();
+    const startDate = start ? new Date(start) : new Date(endDate.getTime() - 7 * 24 * 60 * 60 * 1000);
+    return this.dashboardService.getDepartmentOverview(name, startDate, endDate);
+  }
 }
