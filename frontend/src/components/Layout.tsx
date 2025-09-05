@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Phone, BarChart3, Users, Home } from 'lucide-react';
+import { Phone, BarChart3, Users, Home, Search } from 'lucide-react';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -11,6 +11,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
 
   const navigation = [
     { name: 'Дашборд', href: '/', icon: Home },
+    { name: 'Поиск по словам', href: '/search', icon: Search },
     { name: 'Менеджеры', href: '/managers', icon: Users },
     { name: 'Отделы', href: '/departments', icon: BarChart3 },
     { name: 'Звонки', href: '/calls', icon: Phone },
