@@ -2,10 +2,39 @@ import axios from 'axios';
 import { DashboardStats, ManagerStat, DepartmentStat, DepartmentsOverview, DepartmentOverview, DateRange, ManagerCallRecord } from '../types/dashboard';
 import { mockDashboardStats, mockManagerStats, mockDepartmentStats } from './mockData';
 
-// const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
-const API_BASE_URL = 'http://localhost:3001/api';
-// const USE_MOCK_DATA = import.meta.env.VITE_USE_MOCK === 'true' || !import.meta.env.VITE_API_URL;
-const USE_MOCK_DATA = false;
+// Автоматическое определение API URL
+const getApiUrl = () => {
+  // Если задано в переменных окружения
+  if (import.meta.env.VITE_API_URL) {
+    return import.meta.env.VITE_API_URL;
+  }
+  
+  // Определяем по hostname
+  const hostname = window.location.hostname;
+  
+  if (hostname === 'localhost' || hostname === '127.0.0.1') {
+    // Локальная разработка - используем proxy
+    return '/api';
+  } else if (hostname.includes('tuna.am')) {
+    // На tuna.am - используем proxy через Vite dev server
+    return '/api';
+  } else {
+    // Продакшн - относительный путь
+    return '/api';
+  }
+};
+
+const API_BASE_URL = getApiUrl();
+const USE_MOCK_DATA = import.meta.env.VITE_USE_MOCK === 'true' || false;
+
+// Логирование для отладки
+console.log('Dashboard Service Config:', {
+  hostname: window.location.hostname,
+  API_BASE_URL,
+  USE_MOCK_DATA,
+  VITE_API_URL: import.meta.env.VITE_API_URL,
+  VITE_USE_MOCK: import.meta.env.VITE_USE_MOCK
+});
 
 const api = axios.create({
   baseURL: API_BASE_URL,

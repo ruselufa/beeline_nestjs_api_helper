@@ -131,7 +131,7 @@ export class DashboardService {
         averageScore: Math.round(averageScore * 10) / 10,
         totalDuration,
         trend,
-        lastCallDate: records.length > 0 ? records[0].createdAt : new Date(),
+        lastCallDate: records.length > 0 ? (records[0].date || records[0].createdAt) : new Date(),
         successRate: Math.round((analyzedRecords.length / totalCalls) * 100) || 0,
       };
     })
@@ -143,17 +143,18 @@ export class DashboardService {
   private async getCallAnalytics(startDate: Date, endDate: Date) {
     const records = await this.recordRepository.find({
       where: {
-        createdAt: Between(startDate, endDate),
+        date: Between(startDate, endDate),
       },
       relations: ['abonent'],
     });
 
-    // Группируем по дням
+    // Группируем по дням по реальной дате звонка
     const dailyStats = new Map<string, { totalCalls: number; totalDuration: number; scores: number[] }>();
 
     records.forEach(record => {
-      const date = record.createdAt.toISOString().split('T')[0];
-      const existing = dailyStats.get(date) || { totalCalls: 0, totalDuration: 0, scores: [] };
+      // Используем дату звонка, а не создания записи
+      const callDate = record.date ? new Date(record.date).toISOString().split('T')[0] : record.createdAt.toISOString().split('T')[0];
+      const existing = dailyStats.get(callDate) || { totalCalls: 0, totalDuration: 0, scores: [] };
       
       existing.totalCalls++;
       existing.totalDuration += record.duration || 0;
@@ -167,7 +168,7 @@ export class DashboardService {
         }
       }
       
-      dailyStats.set(date, existing);
+      dailyStats.set(callDate, existing);
     });
 
     return Array.from(dailyStats.entries()).map(([date, stats]) => ({
@@ -258,7 +259,7 @@ export class DashboardService {
   async getDepartmentsOverview(startDate: Date, endDate: Date) {
     const records = await this.recordRepository.find({
       where: {
-        createdAt: Between(startDate, endDate),
+        date: Between(startDate, endDate), // Используем дату звонка
       },
       relations: ['abonent'],
     });
@@ -267,8 +268,9 @@ export class DashboardService {
 
     const daily = new Map<string, { calls: number; duration: number; scores: number[] }>();
     for (const rec of filtered) {
-      const date = rec.createdAt.toISOString().split('T')[0];
-      const agg = daily.get(date) || { calls: 0, duration: 0, scores: [] };
+      // Используем дату звонка, а не создания записи
+      const callDate = rec.date ? new Date(rec.date).toISOString().split('T')[0] : rec.createdAt.toISOString().split('T')[0];
+      const agg = daily.get(callDate) || { calls: 0, duration: 0, scores: [] };
       agg.calls += 1;
       agg.duration += rec.duration || 0;
       if (rec.deepseek_analysed && rec.deepseek_analysis) {
@@ -277,7 +279,7 @@ export class DashboardService {
         const score = totalScoreHeader?.value;
         if (score !== undefined) agg.scores.push(score);
       }
-      daily.set(date, agg);
+      daily.set(callDate, agg);
     }
 
     const dailySeries = Array.from(daily.entries())
@@ -315,7 +317,7 @@ export class DashboardService {
   async getDepartmentOverview(department: string, startDate: Date, endDate: Date) {
     const records = await this.recordRepository.find({
       where: {
-        createdAt: Between(startDate, endDate),
+        date: Between(startDate, endDate), // Используем дату звонка
       },
       relations: ['abonent'],
     });
@@ -326,8 +328,9 @@ export class DashboardService {
     const managerAgg = new Map<number, { name: string; calls: number; duration: number; scores: number[] }>();
 
     for (const rec of filtered) {
-      const date = rec.createdAt.toISOString().split('T')[0];
-      const agg = daily.get(date) || { calls: 0, duration: 0, scores: [] };
+      // Используем дату звонка, а не создания записи
+      const callDate = rec.date ? new Date(rec.date).toISOString().split('T')[0] : rec.createdAt.toISOString().split('T')[0];
+      const agg = daily.get(callDate) || { calls: 0, duration: 0, scores: [] };
       agg.calls += 1;
       agg.duration += rec.duration || 0;
       if (rec.deepseek_analysed && rec.deepseek_analysis) {
@@ -336,7 +339,7 @@ export class DashboardService {
         const score = totalScoreHeader?.value;
         if (score !== undefined) agg.scores.push(score);
       }
-      daily.set(date, agg);
+      daily.set(callDate, agg);
 
       // per manager aggregate
       const managerId = rec.abonent?.id;
@@ -391,7 +394,7 @@ export class DashboardService {
       },
       relations: ['abonent'],
       order: {
-        createdAt: 'DESC',
+        date: 'DESC', // Сортируем по дате звонка, а не создания записи
       },
       take: 20,
     });
@@ -409,7 +412,7 @@ export class DashboardService {
           clientPhone: record.phone || 'Не указан',
           duration: record.duration || 0,
           score: score,
-          date: record.createdAt,
+          date: record.date || record.createdAt, // Используем дату звонка, если доступна
           department: record.abonent.department || 'Не указан',
           analysis: {
             quality: analysis?.quality_score || 0,
@@ -432,7 +435,7 @@ export class DashboardService {
       },
       relations: ['abonent'],
       order: {
-        createdAt: 'DESC',
+        date: 'DESC', // Сортируем по дате звонка
       },
       take: limit,
     });
